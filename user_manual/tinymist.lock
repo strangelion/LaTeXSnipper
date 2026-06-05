@@ -3,6 +3,13 @@
 version = "0.1.0-beta0"
 
 [[document]]
+id = "file:user_manual.typ"
+inputs = []
+main = "file:user_manual.typ"
+root = "file:."
+system-fonts = true
+
+[[document]]
 id = "file:用户手册.typ"
 inputs = []
 main = "file:用户手册.typ"
@@ -22,4 +29,8 @@ priority = 256
 
 [[route]]
 id = "file:用户手册.typ"
+priority = 256
+
+[[route]]
+id = "file:user_manual.typ"
 priority = 256
