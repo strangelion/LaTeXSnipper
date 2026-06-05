@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
+using LaTeXSnipper.OfficePlugin.Abstractions;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -12,7 +13,7 @@ namespace LaTeXSnipper.OfficePlugin.PowerPointAddIn;
 
 internal sealed class PowerPointSettingsWindow : Form
 {
-    private const string SettingsHostName = "latexsnipper.officeplugin.local";
+    private const string SettingsHostName = "latexsnipper-powerpoint.officeplugin.local";
 
     private static PowerPointSettingsWindow? _window;
 
@@ -116,6 +117,7 @@ internal sealed class PowerPointSettingsWindow : Form
             ["type"] = "init",
             ["locale"] = CultureInfo.CurrentUICulture.Name,
             ["platform"] = "powerpoint",
+            ["insertionBackend"] = settings.InsertionBackend.ToString(),
         });
         string script =
             "(function(payload){" +
@@ -145,32 +147,19 @@ internal sealed class PowerPointSettingsWindow : Form
             return;
         }
 
-        var settings = new PowerPointPluginSettings();
-        settings.Save();
+        string backend = message.TryGetValue("insertionBackend", out object rawBackend)
+            ? Convert.ToString(rawBackend, CultureInfo.InvariantCulture) ?? string.Empty
+            : string.Empty;
+        FormulaInsertionBackend insertionBackend = backend == FormulaInsertionBackend.PowerPointCompatibility.ToString()
+            ? FormulaInsertionBackend.PowerPointCompatibility
+            : FormulaInsertionBackend.Ole;
+        new PowerPointPluginSettings(insertionBackend).Save();
         _ = SendSettingsAsync();
     }
 
     private static string ResolveAssetsRoot()
     {
-        string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        string copied = Path.Combine(baseDirectory, "EditorAssets");
-        if (File.Exists(Path.Combine(copied, "settings.html")))
-        {
-            return copied;
-        }
-
-        string? current = baseDirectory;
-        for (int i = 0; i < 8 && current != null; i++)
-        {
-            string candidate = Path.Combine(current, "office_plugin", "hosts", "PowerPointAddIn", "EditorAssets");
-            if (File.Exists(Path.Combine(candidate, "settings.html")))
-            {
-                return candidate;
-            }
-
-            current = Directory.GetParent(current)?.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Office plugin settings assets were not found.");
+        return InstalledAssetResolver.FindAssetRoot("settings.html")
+            ?? throw new DirectoryNotFoundException("Office plugin settings assets were not found.");
     }
 }

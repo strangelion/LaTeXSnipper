@@ -1,6 +1,6 @@
-; LaTeXSnipper Office Plugin - Inno Setup Installer
+﻿; LaTeXSnipper Office Plugin - Inno Setup Installer
 ; Build: iscc /DVersion=%VERSION% /DConfig=Release installer.iss
-;   or for Debug: iscc /DVersion=0.0.0 /DConfig=Debug installer.iss
+;   or for Debug: iscc /DVersion=2.3.2 /DConfig=Debug installer.iss
 
 #define AppName "LaTeXSnipper Office Plugin"
 #define AppPublisher "SakuraMathcraft"
@@ -9,7 +9,7 @@
 #define PowerPointAddInName "LaTeXSnipper.OfficePlugin.PowerPointVstoAddIn"
 
 #ifndef Version
-  #define Version "0.0.0"
+  #define Version "2.3.2"
 #endif
 #ifndef Config
   #define Config "Release"
@@ -55,12 +55,16 @@ Source: "..\hosts\WordVstoAddIn\bin\{#Config}\LaTeXSnipper.OfficePlugin.Bridge.d
   DestDir: "{app}\Word"; Flags: ignoreversion
 Source: "..\hosts\WordVstoAddIn\bin\{#Config}\LaTeXSnipper.OfficePlugin.Editor.dll"; \
   DestDir: "{app}\Word"; Flags: ignoreversion
+Source: "..\hosts\WordVstoAddIn\bin\{#Config}\LaTeXSnipper.OfficePlugin.Rendering.dll"; \
+  DestDir: "{app}\Word"; Flags: ignoreversion
 Source: "..\hosts\WordVstoAddIn\bin\{#Config}\Microsoft.Office.Tools.Common.v4.0.Utilities.dll"; \
   DestDir: "{app}\Word"; Flags: ignoreversion
 Source: "..\hosts\WordVstoAddIn\bin\{#Config}\Microsoft.Web.WebView2.Core.dll"; \
   DestDir: "{app}\Word"; Flags: ignoreversion
 Source: "..\hosts\WordVstoAddIn\bin\{#Config}\Microsoft.Web.WebView2.WinForms.dll"; \
   DestDir: "{app}\Word"; Flags: ignoreversion
+Source: "..\hosts\WordVstoAddIn\bin\{#Config}\runtimes\*"; \
+  DestDir: "{app}\Word\runtimes"; Flags: ignoreversion recursesubdirs
 
 ; ===== PowerPoint VSTO Add-in =====
 Source: "..\hosts\PowerPointVstoAddIn\bin\{#Config}\LaTeXSnipper.OfficePlugin.PowerPointVstoAddIn.vsto"; \
@@ -77,25 +81,50 @@ Source: "..\hosts\PowerPointVstoAddIn\bin\{#Config}\LaTeXSnipper.OfficePlugin.Br
   DestDir: "{app}\PowerPoint"; Flags: ignoreversion
 Source: "..\hosts\PowerPointVstoAddIn\bin\{#Config}\LaTeXSnipper.OfficePlugin.Editor.dll"; \
   DestDir: "{app}\PowerPoint"; Flags: ignoreversion
+Source: "..\hosts\PowerPointVstoAddIn\bin\{#Config}\LaTeXSnipper.OfficePlugin.Rendering.dll"; \
+  DestDir: "{app}\PowerPoint"; Flags: ignoreversion
 Source: "..\hosts\PowerPointVstoAddIn\bin\{#Config}\Microsoft.Office.Tools.Common.v4.0.Utilities.dll"; \
   DestDir: "{app}\PowerPoint"; Flags: ignoreversion
 Source: "..\hosts\PowerPointVstoAddIn\bin\{#Config}\Microsoft.Web.WebView2.Core.dll"; \
   DestDir: "{app}\PowerPoint"; Flags: ignoreversion
 Source: "..\hosts\PowerPointVstoAddIn\bin\{#Config}\Microsoft.Web.WebView2.WinForms.dll"; \
   DestDir: "{app}\PowerPoint"; Flags: ignoreversion
+Source: "..\hosts\PowerPointVstoAddIn\bin\{#Config}\runtimes\*"; \
+  DestDir: "{app}\PowerPoint\runtimes"; Flags: ignoreversion recursesubdirs
 
 ; ===== Certificate =====
-Source: "devcert.cer"; DestDir: "{app}"; Flags: ignoreversion
+Source: "vsto-signing.cer"; DestDir: "{app}"; Flags: ignoreversion
+
+; ===== VSTO inclusion helper script =====
+Source: "WriteVstoInclusions.ps1"; DestDir: "{app}"; Flags: ignoreversion
+
+; ===== Force cleanup script =====
+; Pre-install copy extracted to {tmp} via ExtractTemporaryFile, runs BEFORE registry/VSTO
+Source: "..\tools\ForceClean.ps1"; DestDir: "{tmp}"; Flags: dontcopy
+; Runtime copy installed to {app} for use during uninstall
+Source: "..\tools\ForceClean.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 ; ===== Icon =====
 Source: "icon.ico"; DestDir: "{app}\Word"; Flags: ignoreversion
 Source: "icon.ico"; DestDir: "{app}\PowerPoint"; Flags: ignoreversion
+
+; ===== Shared MathJax runtime =====
+Source: "..\hosts\OleFormulaObject\bin\{#Config}\net48\MathJax-3.2.2\*"; \
+  DestDir: "{app}\MathJax-3.2.2"; Flags: ignoreversion recursesubdirs
 
 ; ===== EditorAssets (shared, installed alongside both hosts) =====
 Source: "..\hosts\WordAddIn\bin\{#Config}\net48\EditorAssets\*"; \
   DestDir: "{app}\Word\EditorAssets"; Flags: ignoreversion recursesubdirs
 Source: "..\hosts\PowerPointAddIn\bin\{#Config}\net48\EditorAssets\*"; \
   DestDir: "{app}\PowerPoint\EditorAssets"; Flags: ignoreversion recursesubdirs
+
+; ===== OLE formula object handler =====
+Source: "..\hosts\OleFormulaObjectNative\bin\x64\{#Config}\LaTeXSnipper.OfficePlugin.OleFormulaObject.Handler.dll"; \
+  DestDir: "{app}\OleFormulaObject\x64"; Flags: ignoreversion
+Source: "..\hosts\OleFormulaObjectNative\bin\Win32\{#Config}\LaTeXSnipper.OfficePlugin.OleFormulaObject.Handler.dll"; \
+  DestDir: "{app}\OleFormulaObject\x86"; Flags: ignoreversion
+Source: "..\hosts\OleFormulaObject\bin\{#Config}\net48\*"; \
+  DestDir: "{app}\OleFormulaRenderer"; Flags: ignoreversion recursesubdirs; Excludes: "*.pdb,*.xml,icon.ico,Microsoft.Web.WebView2.Wpf.dll,MathJax-3.2.2\*,EditorAssets\*"
 
 [Registry]
 ; ===== Word Add-in (versionless path) =====
@@ -144,6 +173,51 @@ Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\16.0\Word\Addins\{#Wo
 Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\16.0\Word\Addins\{#WordAddInName}"; \
   ValueType: dword; ValueName: "CommandLineSafe"; ValueData: "1"; Flags: uninsdeletekey; Check: IsWin64
 
+; ===== Word Add-in (ClickToRun virtualized registry — required for Office 365 / C2R) =====
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\Word\Addins\{#WordAddInName}"; \
+  ValueType: string; ValueName: "Description"; ValueData: "LaTeXSnipper native Word plugin"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\Word\Addins\{#WordAddInName}"; \
+  ValueType: string; ValueName: "FriendlyName"; ValueData: "LaTeXSnipper"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\Word\Addins\{#WordAddInName}"; \
+  ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\Word\Addins\{#WordAddInName}"; \
+  ValueType: string; ValueName: "Manifest"; ValueData: "{code:GetManifestUri|Word\{#WordAddInName}.vsto}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\Word\Addins\{#WordAddInName}"; \
+  ValueType: dword; ValueName: "CommandLineSafe"; ValueData: "1"; Flags: uninsdeletekey
+
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\Word\Addins\{#WordAddInName}"; \
+  ValueType: string; ValueName: "Description"; ValueData: "LaTeXSnipper native Word plugin"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\Word\Addins\{#WordAddInName}"; \
+  ValueType: string; ValueName: "FriendlyName"; ValueData: "LaTeXSnipper"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\Word\Addins\{#WordAddInName}"; \
+  ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\Word\Addins\{#WordAddInName}"; \
+  ValueType: string; ValueName: "Manifest"; ValueData: "{code:GetManifestUri|Word\{#WordAddInName}.vsto}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\Word\Addins\{#WordAddInName}"; \
+  ValueType: dword; ValueName: "CommandLineSafe"; ValueData: "1"; Flags: uninsdeletekey
+
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\Word\Addins\{#WordAddInName}"; \
+  ValueType: string; ValueName: "Description"; ValueData: "LaTeXSnipper native Word plugin"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\Word\Addins\{#WordAddInName}"; \
+  ValueType: string; ValueName: "FriendlyName"; ValueData: "LaTeXSnipper"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\Word\Addins\{#WordAddInName}"; \
+  ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\Word\Addins\{#WordAddInName}"; \
+  ValueType: string; ValueName: "Manifest"; ValueData: "{code:GetManifestUri|Word\{#WordAddInName}.vsto}"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\Word\Addins\{#WordAddInName}"; \
+  ValueType: dword; ValueName: "CommandLineSafe"; ValueData: "1"; Flags: uninsdeletekey; Check: IsWin64
+
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\Word\Addins\{#WordAddInName}"; \
+  ValueType: string; ValueName: "Description"; ValueData: "LaTeXSnipper native Word plugin"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\Word\Addins\{#WordAddInName}"; \
+  ValueType: string; ValueName: "FriendlyName"; ValueData: "LaTeXSnipper"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\Word\Addins\{#WordAddInName}"; \
+  ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\Word\Addins\{#WordAddInName}"; \
+  ValueType: string; ValueName: "Manifest"; ValueData: "{code:GetManifestUri|Word\{#WordAddInName}.vsto}"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\Word\Addins\{#WordAddInName}"; \
+  ValueType: dword; ValueName: "CommandLineSafe"; ValueData: "1"; Flags: uninsdeletekey; Check: IsWin64
+
 ; ===== PowerPoint Add-in (versionless path) =====
 Root: HKLM; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\{#PowerPointAddInName}"; \
   ValueType: string; ValueName: "Description"; ValueData: "LaTeXSnipper native PowerPoint plugin"; Flags: uninsdeletekey
@@ -190,35 +264,135 @@ Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\16.0\PowerPoint\Addin
 Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\16.0\PowerPoint\Addins\{#PowerPointAddInName}"; \
   ValueType: dword; ValueName: "CommandLineSafe"; ValueData: "1"; Flags: uninsdeletekey; Check: IsWin64
 
+; ===== PowerPoint Add-in (ClickToRun virtualized registry — required for Office 365 / C2R) =====
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: string; ValueName: "Description"; ValueData: "LaTeXSnipper native PowerPoint plugin"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: string; ValueName: "FriendlyName"; ValueData: "LaTeXSnipper"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: string; ValueName: "Manifest"; ValueData: "{code:GetManifestUri|PowerPoint\{#PowerPointAddInName}.vsto}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: dword; ValueName: "CommandLineSafe"; ValueData: "1"; Flags: uninsdeletekey
+
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: string; ValueName: "Description"; ValueData: "LaTeXSnipper native PowerPoint plugin"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: string; ValueName: "FriendlyName"; ValueData: "LaTeXSnipper"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: string; ValueName: "Manifest"; ValueData: "{code:GetManifestUri|PowerPoint\{#PowerPointAddInName}.vsto}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: dword; ValueName: "CommandLineSafe"; ValueData: "1"; Flags: uninsdeletekey
+
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: string; ValueName: "Description"; ValueData: "LaTeXSnipper native PowerPoint plugin"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: string; ValueName: "FriendlyName"; ValueData: "LaTeXSnipper"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: string; ValueName: "Manifest"; ValueData: "{code:GetManifestUri|PowerPoint\{#PowerPointAddInName}.vsto}"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: dword; ValueName: "CommandLineSafe"; ValueData: "1"; Flags: uninsdeletekey; Check: IsWin64
+
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: string; ValueName: "Description"; ValueData: "LaTeXSnipper native PowerPoint plugin"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: string; ValueName: "FriendlyName"; ValueData: "LaTeXSnipper"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: string; ValueName: "Manifest"; ValueData: "{code:GetManifestUri|PowerPoint\{#PowerPointAddInName}.vsto}"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM; Subkey: "Software\WOW6432Node\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\PowerPoint\Addins\{#PowerPointAddInName}"; \
+  ValueType: dword; ValueName: "CommandLineSafe"; ValueData: "1"; Flags: uninsdeletekey; Check: IsWin64
+
+; ===== EnableLocalMachineVSTO — REQUIRED for VSTO to even look at HKLM add-ins =====
+Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; \
+  ValueType: string; ValueName: "EnableLocalMachineVSTO"; ValueData: "1"; Flags: uninsdeletevalue
+
+; ===== OLE formula object, 64-bit Office =====
+Root: HKLM64; Subkey: "Software\Classes\LaTeXSnipper.Formula"; \
+  ValueType: string; ValueData: "LaTeXSnipper Formula"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM64; Subkey: "Software\Classes\LaTeXSnipper.Formula\CLSID"; \
+  ValueType: string; ValueData: "{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM64; Subkey: "Software\Classes\LaTeXSnipper.Formula.1"; \
+  ValueType: string; ValueData: "LaTeXSnipper Formula"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM64; Subkey: "Software\Classes\LaTeXSnipper.Formula.1\CLSID"; \
+  ValueType: string; ValueData: "{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM64; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}"; \
+  ValueType: string; ValueData: "LaTeXSnipper Formula"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM64; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}"; \
+  ValueType: string; ValueName: "AppID"; ValueData: "{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}"; Check: IsWin64
+Root: HKLM64; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}\ProgID"; \
+  ValueType: string; ValueData: "LaTeXSnipper.Formula.1"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM64; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}\VersionIndependentProgID"; \
+  ValueType: string; ValueData: "LaTeXSnipper.Formula"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM64; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}\InprocServer32"; \
+  ValueType: string; ValueData: "{app}\OleFormulaObject\x64\LaTeXSnipper.OfficePlugin.OleFormulaObject.Handler.dll"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM64; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}\InprocServer32"; \
+  ValueType: string; ValueName: "ThreadingModel"; ValueData: "Apartment"; Check: IsWin64
+Root: HKLM64; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}\DefaultIcon"; \
+  ValueType: string; ValueData: "{app}\OleFormulaObject\x64\LaTeXSnipper.OfficePlugin.OleFormulaObject.Handler.dll,0"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM64; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}\MiscStatus"; \
+  ValueType: string; ValueData: "672280"; Flags: uninsdeletekey; Check: IsWin64
+Root: HKLM64; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}\MiscStatus\1"; \
+  ValueType: string; ValueData: "672280"; Flags: uninsdeletekey; Check: IsWin64
+
+; ===== OLE formula object, 32-bit Office =====
+Root: HKLM32; Subkey: "Software\Classes\LaTeXSnipper.Formula"; \
+  ValueType: string; ValueData: "LaTeXSnipper Formula"; Flags: uninsdeletekey
+Root: HKLM32; Subkey: "Software\Classes\LaTeXSnipper.Formula\CLSID"; \
+  ValueType: string; ValueData: "{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}"; Flags: uninsdeletekey
+Root: HKLM32; Subkey: "Software\Classes\LaTeXSnipper.Formula.1"; \
+  ValueType: string; ValueData: "LaTeXSnipper Formula"; Flags: uninsdeletekey
+Root: HKLM32; Subkey: "Software\Classes\LaTeXSnipper.Formula.1\CLSID"; \
+  ValueType: string; ValueData: "{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}"; Flags: uninsdeletekey
+Root: HKLM32; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}"; \
+  ValueType: string; ValueData: "LaTeXSnipper Formula"; Flags: uninsdeletekey
+Root: HKLM32; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}"; \
+  ValueType: string; ValueName: "AppID"; ValueData: "{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}"
+Root: HKLM32; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}\ProgID"; \
+  ValueType: string; ValueData: "LaTeXSnipper.Formula.1"; Flags: uninsdeletekey
+Root: HKLM32; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}\VersionIndependentProgID"; \
+  ValueType: string; ValueData: "LaTeXSnipper.Formula"; Flags: uninsdeletekey
+Root: HKLM32; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}\InprocServer32"; \
+  ValueType: string; ValueData: "{app}\OleFormulaObject\x86\LaTeXSnipper.OfficePlugin.OleFormulaObject.Handler.dll"; Flags: uninsdeletekey
+Root: HKLM32; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}\InprocServer32"; \
+  ValueType: string; ValueName: "ThreadingModel"; ValueData: "Apartment"
+Root: HKLM32; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}\DefaultIcon"; \
+  ValueType: string; ValueData: "{app}\OleFormulaObject\x86\LaTeXSnipper.OfficePlugin.OleFormulaObject.Handler.dll,0"; Flags: uninsdeletekey
+Root: HKLM32; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}\MiscStatus"; \
+  ValueType: string; ValueData: "672280"; Flags: uninsdeletekey
+Root: HKLM32; Subkey: "Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}\MiscStatus\1"; \
+  ValueType: string; ValueData: "672280"; Flags: uninsdeletekey
+
 [Run]
-; Trust the signing certificate (both Root and TrustedPublisher needed for self-signed)
-Filename: "{sys}\certutil.exe"; Parameters: "-addstore -f ""Root"" ""{app}\devcert.cer"""; \
+; Trust the self-signed VSTO manifest certificate.
+Filename: "{sys}\certutil.exe"; Parameters: "-addstore -f ""Root"" ""{app}\vsto-signing.cer"""; \
   Flags: runhidden
-Filename: "{sys}\certutil.exe"; Parameters: "-addstore -f ""TrustedPublisher"" ""{app}\devcert.cer"""; \
+Filename: "{sys}\certutil.exe"; Parameters: "-addstore -f ""TrustedPublisher"" ""{app}\vsto-signing.cer"""; \
   StatusMsg: "{cm:InstallingCertificate}"; Flags: runhidden
 
-; Uninstall any previous VSTO deployment with the same identity (handles reinstall/path change)
-Filename: "{code:GetVstoInstallerPath}"; Parameters: "/Uninstall ""{app}\Word\{#WordAddInName}.vsto"" /Silent"; \
-  Flags: runhidden
-Filename: "{code:GetVstoInstallerPath}"; Parameters: "/Uninstall ""{app}\PowerPoint\{#PowerPointAddInName}.vsto"" /Silent"; \
-  Flags: runhidden
-
-; Run VSTOInstaller silently for Word
-Filename: "{code:GetVstoInstallerPath}"; Parameters: "/Install ""{app}\Word\{#WordAddInName}.vsto"" /Silent"; \
+; Write VSTO security inclusion entries
+; HKLM is written in elevated installer context; HKCU is written as original user.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+  Parameters: "-ExecutionPolicy Bypass -File ""{app}\WriteVstoInclusions.ps1"" -ManifestPath ""{app}\Word\{#WordAddInName}.vsto"" -Target HKLM"; \
   StatusMsg: "{cm:RegisteringWord}"; Flags: runhidden
 
-; Run VSTOInstaller silently for PowerPoint
-Filename: "{code:GetVstoInstallerPath}"; Parameters: "/Install ""{app}\PowerPoint\{#PowerPointAddInName}.vsto"" /Silent"; \
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+  Parameters: "-ExecutionPolicy Bypass -File ""{app}\WriteVstoInclusions.ps1"" -ManifestPath ""{app}\Word\{#WordAddInName}.vsto"" -Target HKCU"; \
+  StatusMsg: "{cm:RegisteringWord}"; Flags: runhidden runasoriginaluser
+
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+  Parameters: "-ExecutionPolicy Bypass -File ""{app}\WriteVstoInclusions.ps1"" -ManifestPath ""{app}\PowerPoint\{#PowerPointAddInName}.vsto"" -Target HKLM"; \
   StatusMsg: "{cm:RegisteringPowerPoint}"; Flags: runhidden
 
-[UninstallRun]
-; Uninstall VSTO for Word
-Filename: "{code:GetVstoInstallerPath}"; Parameters: "/Uninstall ""{app}\Word\{#WordAddInName}.vsto"" /Silent"; \
-  Flags: runhidden; RunOnceId: "UninstallWordVsto"
-
-; Uninstall VSTO for PowerPoint
-Filename: "{code:GetVstoInstallerPath}"; Parameters: "/Uninstall ""{app}\PowerPoint\{#PowerPointAddInName}.vsto"" /Silent"; \
-  Flags: runhidden; RunOnceId: "UninstallPowerPointVsto"
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+  Parameters: "-ExecutionPolicy Bypass -File ""{app}\WriteVstoInclusions.ps1"" -ManifestPath ""{app}\PowerPoint\{#PowerPointAddInName}.vsto"" -Target HKCU"; \
+  StatusMsg: "{cm:RegisteringPowerPoint}"; Flags: runhidden runasoriginaluser
 
 [CustomMessages]
 InstallingCertificate=Installing add-in certificate to Trusted Publisher store...
@@ -233,13 +407,13 @@ function VstoInstallerExists: Boolean;
 var
   Path: string;
 begin
-  Path := ExpandConstant('{commonpf}\Common Files\Microsoft Shared\VSTO\10.0\VSTOInstaller.exe');
+  Path := ExpandConstant('{commonpf32}\Common Files\Microsoft Shared\VSTO\10.0\VSTOInstaller.exe');
   if FileExists(Path) then
   begin
     Result := True;
     Exit;
   end;
-  Path := ExpandConstant('{commonpf32}\Common Files\Microsoft Shared\VSTO\10.0\VSTOInstaller.exe');
+  Path := ExpandConstant('{commonpf}\Common Files\Microsoft Shared\VSTO\10.0\VSTOInstaller.exe');
   Result := FileExists(Path);
 end;
 
@@ -258,14 +432,6 @@ begin
     Result := True;
 end;
 
-procedure KillOfficeProcesses;
-var
-  ResultCode: Integer;
-begin
-  Exec(ExpandConstant('{cmd}'), '/c taskkill /f /im WINWORD.EXE /im POWERPNT.EXE /im EXCEL.EXE 2>nul', '', 0, ewWaitUntilTerminated, ResultCode);
-  Sleep(2000);
-end;
-
 function GetManifestUri(Param: string): string;
 var
   AppDir: string;
@@ -276,21 +442,74 @@ begin
   Result := 'file:///' + AppDir + '/' + Param + '|vstolocal';
 end;
 
-function GetVstoInstallerPath(Param: string): string;
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  Path: string;
+  ResultCode: Integer;
 begin
-  Path := ExpandConstant('{commonpf}\Common Files\Microsoft Shared\VSTO\10.0\VSTOInstaller.exe');
-  if FileExists(Path) then
-    Result := Path
-  else
+  if CurUninstallStep = usUninstall then
   begin
-    Path := ExpandConstant('{commonpf32}\Common Files\Microsoft Shared\VSTO\10.0\VSTOInstaller.exe');
-    if FileExists(Path) then
-      Result := Path
-    else
-      RaiseException('Microsoft VSTO Runtime 10.0 is required but was not found. Please install Visual Studio Tools for Office.');
+    Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+         '-ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\ForceClean.ps1" -InstallRoot "' + ExpandConstant('{app}') + '"',
+         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Log('ForceClean exited with code ' + IntToStr(ResultCode));
   end;
+end;
+
+function CleanClickOnceStore(const RootKey: Integer; const SubPath: string): Boolean;
+var
+  SubKeys, ValueNames: TArrayOfString;
+  KeyPath, ValueStr: string;
+  i, j: Integer;
+begin
+  Result := False;
+  if not RegGetSubkeyNames(RootKey, SubPath, SubKeys) then Exit;
+  for i := 0 to GetArrayLength(SubKeys) - 1 do
+  begin
+    KeyPath := SubPath + '\' + SubKeys[i];
+    if RegGetValueNames(RootKey, KeyPath, ValueNames) then
+      for j := 0 to GetArrayLength(ValueNames) - 1 do
+        if RegQueryStringValue(RootKey, KeyPath, ValueNames[j], ValueStr) then
+          if (Pos('LaTeXSnipper.OfficePlugin', ValueStr) > 0) or
+             (Pos('LaTeXSnipper Office Plugin', ValueStr) > 0) or
+             (Pos('LaTeXSnipper/OfficePlugin', ValueStr) > 0) or
+             (Pos('LaTeXSnipper\OfficePlugin', ValueStr) > 0) then
+          begin
+            RegDeleteKeyIncludingSubkeys(RootKey, KeyPath);
+            Log('Cleaned ClickOnce: ' + KeyPath);
+            Result := True;
+            break;
+          end;
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Result := '';
+
+  // PowerShell cleanup: certs, file cache, HKLM+WOW registry paths
+  ExtractTemporaryFile('ForceClean.ps1');
+  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+       '-ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}') + '\ForceClean.ps1" -InstallRoot "' + ExpandConstant('{app}') + '" -RemoveInstallDir',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Log('ForceClean exited ' + IntToStr(ResultCode));
+
+  // Native Pascal: directly clean ClickOnce stores (SubscriptionStore,
+  // SolutionMetadata, ActivationData) — the root cause of AddInAlreadyInstalledException
+  CleanClickOnceStore(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Deployment\SubscriptionStore');
+  CleanClickOnceStore(HKEY_CURRENT_USER, 'Software\Microsoft\VSTO\SolutionMetadata');
+  CleanClickOnceStore(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Deployment\ActivationData');
+
+  RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\Classes\LaTeXSnipper.Formula');
+  RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\Classes\LaTeXSnipper.Formula.1');
+  RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}');
+  RegDeleteKeyIncludingSubkeys(HKEY_LOCAL_MACHINE, 'Software\Classes\LaTeXSnipper.Formula');
+  RegDeleteKeyIncludingSubkeys(HKEY_LOCAL_MACHINE, 'Software\Classes\LaTeXSnipper.Formula.1');
+  RegDeleteKeyIncludingSubkeys(HKEY_LOCAL_MACHINE, 'Software\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}');
+  RegDeleteKeyIncludingSubkeys(HKEY_LOCAL_MACHINE, 'Software\WOW6432Node\Classes\LaTeXSnipper.Formula');
+  RegDeleteKeyIncludingSubkeys(HKEY_LOCAL_MACHINE, 'Software\WOW6432Node\Classes\LaTeXSnipper.Formula.1');
+  RegDeleteKeyIncludingSubkeys(HKEY_LOCAL_MACHINE, 'Software\WOW6432Node\Classes\CLSID\{{B7F5B4AB-5F94-4D87-A29F-9A41D41B3B9F}');
 end;
 
 procedure HideVstoUninstallEntries;
@@ -302,184 +521,25 @@ var
 begin
   UninstallRoot := 'Software\Microsoft\Windows\CurrentVersion\Uninstall';
   if RegGetSubkeyNames(HKEY_CURRENT_USER, UninstallRoot, SubkeyNames) then
-  begin
     for i := 0 to GetArrayLength(SubkeyNames) - 1 do
     begin
       KeyPath := UninstallRoot + '\' + SubkeyNames[i];
       if RegQueryStringValue(HKEY_CURRENT_USER, KeyPath, 'DisplayName', DisplayName) then
-      begin
         if Pos('LaTeXSnipper.OfficePlugin', DisplayName) > 0 then
         begin
           RegWriteDWordValue(HKEY_CURRENT_USER, KeyPath, 'SystemComponent', 1);
           Log('Hid VSTO uninstall entry: ' + DisplayName);
         end;
-      end;
     end;
-  end;
-end;
-
-procedure CleanResiliencyForApp(App: string);
-var
-  ResRoots: array [0..1] of string;
-  Subkeys: array [0..1] of string;
-  KeyPath: string;
-  ValueNames: TArrayOfString;
-  i, j, k: Integer;
-begin
-  ResRoots[0] := 'Software\Microsoft\Office\' + App + '\Resiliency';
-  ResRoots[1] := 'Software\Microsoft\Office\16.0\' + App + '\Resiliency';
-  Subkeys[0] := 'DisabledItems';
-  Subkeys[1] := 'CrashingAddinList';
-
-  for i := 0 to 1 do
-    for j := 0 to 1 do
-    begin
-      KeyPath := ResRoots[i] + '\' + Subkeys[j];
-      if RegGetValueNames(HKEY_CURRENT_USER, KeyPath, ValueNames) then
-        for k := 0 to GetArrayLength(ValueNames) - 1 do
-          if Pos('LaTeXSnipper', ValueNames[k]) > 0 then
-          begin
-            RegDeleteValue(HKEY_CURRENT_USER, KeyPath, ValueNames[k]);
-            Log('Cleaned resiliency: ' + KeyPath + '\' + ValueNames[k]);
-          end;
-    end;
-end;
-
-procedure CleanHkcuUninstallEntries;
-var
-  UninstallRoot: string;
-  SubkeyNames: TArrayOfString;
-  DisplayName, KeyPath: string;
-  i: Integer;
-begin
-  UninstallRoot := 'Software\Microsoft\Windows\CurrentVersion\Uninstall';
-  if RegGetSubkeyNames(HKEY_CURRENT_USER, UninstallRoot, SubkeyNames) then
-  begin
-    for i := 0 to GetArrayLength(SubkeyNames) - 1 do
-    begin
-      KeyPath := UninstallRoot + '\' + SubkeyNames[i];
-      if RegQueryStringValue(HKEY_CURRENT_USER, KeyPath, 'DisplayName', DisplayName) then
-      begin
-        if Pos('LaTeXSnipper.OfficePlugin', DisplayName) > 0 then
-        begin
-          RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, KeyPath);
-          Log('Removed HKCU uninstall: ' + DisplayName);
-        end;
-      end;
-    end;
-  end;
-end;
-
-procedure CleanVstoSolutionMetadata;
-var
-  MetaRoot: string;
-  SubkeyNames: TArrayOfString;
-  KeyPath, ValueStr: string;
-  ValueNames: TArrayOfString;
-  i, j: Integer;
-  found: Boolean;
-begin
-  MetaRoot := 'Software\Microsoft\VSTO\SolutionMetadata';
-  if RegGetSubkeyNames(HKEY_CURRENT_USER, MetaRoot, SubkeyNames) then
-  begin
-    for i := 0 to GetArrayLength(SubkeyNames) - 1 do
-    begin
-      KeyPath := MetaRoot + '\' + SubkeyNames[i];
-      found := False;
-      if RegGetValueNames(HKEY_CURRENT_USER, KeyPath, ValueNames) then
-      begin
-        for j := 0 to GetArrayLength(ValueNames) - 1 do
-        begin
-          if RegQueryStringValue(HKEY_CURRENT_USER, KeyPath, ValueNames[j], ValueStr) then
-          begin
-            if Pos('LaTeXSnipper', ValueStr) > 0 then
-            begin
-              found := True;
-              break;
-            end;
-          end;
-        end;
-      end;
-      if found then
-      begin
-        RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, KeyPath);
-        Log('Removed VSTO metadata: ' + SubkeyNames[i]);
-      end;
-    end;
-  end;
-end;
-
-procedure CleanVstoSecurityInclusions;
-var
-  InclusionRoot: string;
-  SubkeyNames: TArrayOfString;
-  KeyPath, UrlValue: string;
-  i: Integer;
-begin
-  InclusionRoot := 'Software\Microsoft\VSTO\Security\Inclusion';
-  if RegGetSubkeyNames(HKEY_CURRENT_USER, InclusionRoot, SubkeyNames) then
-  begin
-    for i := 0 to GetArrayLength(SubkeyNames) - 1 do
-    begin
-      KeyPath := InclusionRoot + '\' + SubkeyNames[i];
-      if RegQueryStringValue(HKEY_CURRENT_USER, KeyPath, 'Url', UrlValue) then
-      begin
-        if Pos('LaTeXSnipper', UrlValue) > 0 then
-        begin
-          RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, KeyPath);
-          Log('Removed VSTO security inclusion: ' + SubkeyNames[i]);
-        end;
-      end;
-    end;
-  end;
-end;
-
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var
-  ClickOnceDir: string;
-begin
-  if CurUninstallStep = usPostUninstall then
-  begin
-    CleanResiliencyForApp('Word');
-    CleanResiliencyForApp('PowerPoint');
-    CleanHkcuUninstallEntries;
-    CleanVstoSolutionMetadata;
-    CleanVstoSecurityInclusions;
-    // Clear ClickOnce cache to prevent stale identity on reinstall
-    ClickOnceDir := ExpandConstant('{localappdata}\Apps\2.0');
-    if DirExists(ClickOnceDir) then
-    begin
-      DelTree(ClickOnceDir, True, True, True);
-      Log('Cleared ClickOnce cache during uninstall.');
-    end;
-    Log('Registry cleanup complete.');
-  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
-var
-  ClickOnceDir: string;
 begin
-  if CurStep = ssInstall then
-  begin
-    KillOfficeProcesses;
-  end;
   if CurStep = ssPostInstall then
   begin
-    // Clear ClickOnce cache to prevent identity conflicts from previous installs
-    ClickOnceDir := ExpandConstant('{localappdata}\Apps\2.0');
-    if DirExists(ClickOnceDir) then
-    begin
-      DelTree(ClickOnceDir, True, True, True);
-      Log('Cleared ClickOnce cache.');
-    end;
-
-    CleanResiliencyForApp('Word');
-    CleanResiliencyForApp('PowerPoint');
-    CleanHkcuUninstallEntries;
-    CleanVstoSolutionMetadata;
-    CleanVstoSecurityInclusions;
     HideVstoUninstallEntries;
     Log('LaTeXSnipper Office Plugin v{#Version} installed to ' + ExpandConstant('{app}'));
   end;
 end;
+
+

@@ -1,41 +1,37 @@
 const TEXT = {
   zh: {
     title: "LaTeXSnipper Office 插件设置",
-    subtitle: "配置编号默认值。",
-    numberingTitle: "带编号公式默认布局",
-    numberRight: "右编号",
-    numberLeft: "左编号",
-    numberingHint: "此设置只影响之后新插入或重新渲染的带编号公式。",
+    subtitle: "配置公式插入方式和编辑器键盘行为。",
+    backendTitle: "公式插入方式",
+    backendHint: "默认使用 OLE 公式对象；也可切换为 PNG 图片方式。",
+    backendOle: "OLE 对象",
+    backendPng: "PNG 图片",
     editorTitle: "编辑器键盘行为",
+    acceptShortcut: "插入或更新当前公式",
     newlineShortcut: "在公式编辑器中换行",
-    cancelShortcut: "关闭编辑器，不应用更改",
+    cancelShortcut: "收回 MathLive 虚拟键盘",
   },
   en: {
     title: "LaTeXSnipper Office Plugin Settings",
-    subtitle: "Configure numbering defaults.",
-    numberingTitle: "Default Numbered Formula Layout",
-    numberRight: "Number on the right",
-    numberLeft: "Number on the left",
-    numberingHint: "This setting applies to newly inserted or re-rendered numbered formulas.",
+    subtitle: "Configure formula insertion and editor keyboard behavior.",
+    backendTitle: "Formula Insertion",
+    backendHint: "OLE formula objects are the default. PNG image insertion is also available.",
+    backendOle: "OLE Object",
+    backendPng: "PNG Image",
     editorTitle: "Editor Keyboard Behavior",
+    acceptShortcut: "insert or update the current formula",
     newlineShortcut: "insert a line break in the formula editor",
-    cancelShortcut: "close the editor without applying changes",
+    cancelShortcut: "hide the MathLive virtual keyboard",
   },
 };
 
 let locale = "zh";
-let platform = "word";
-let numberPlacement = "Right";
+let insertionBackend = "Ole";
 
-const numberingPanel = document.getElementById("numberingPanel");
-const buttons = Array.from(document.querySelectorAll("[data-placement]"));
+const backendButtons = Array.from(document.querySelectorAll("[data-backend]"));
 
 function strings() {
   return locale.startsWith("zh") ? TEXT.zh : TEXT.en;
-}
-
-function send(message) {
-  window.chrome?.webview?.postMessage(message);
 }
 
 function applyText() {
@@ -46,31 +42,28 @@ function applyText() {
   });
 }
 
-function applyPlatform() {
-  const isWord = platform === "word";
-  numberingPanel.style.display = isWord ? "" : "none";
+function send(message) {
+  window.chrome?.webview?.postMessage(message);
 }
 
-function renderPlacement() {
-  buttons.forEach((button) => {
-    button.classList.toggle("active", button.dataset.placement === numberPlacement);
+function renderBackend() {
+  backendButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.backend === insertionBackend);
   });
 }
 
 function init(payload) {
   locale = String(payload?.locale || navigator.language || "zh").toLowerCase();
-  platform = payload?.platform || "word";
-  numberPlacement = payload?.numberPlacement === "Left" ? "Left" : "Right";
+  insertionBackend = payload?.insertionBackend === "PowerPointCompatibility" ? "PowerPointCompatibility" : "Ole";
   applyText();
-  applyPlatform();
-  renderPlacement();
+  renderBackend();
 }
 
-buttons.forEach((button) => {
+backendButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    numberPlacement = button.dataset.placement;
-    renderPlacement();
-    send({ type: "save", numberPlacement });
+    insertionBackend = button.dataset.backend;
+    renderBackend();
+    send({ type: "save", insertionBackend });
   });
 });
 
@@ -79,5 +72,5 @@ if (window.__latexSnipperSettingsInit) {
   init(window.__latexSnipperSettingsInit);
   window.__latexSnipperSettingsInit = null;
 } else {
-  init({ locale: navigator.language, numberPlacement });
+  init({ locale: navigator.language, insertionBackend });
 }

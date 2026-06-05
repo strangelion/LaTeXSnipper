@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using LaTeXSnipper.OfficePlugin.Abstractions;
 
 namespace LaTeXSnipper.OfficePlugin.WordAddIn;
 
@@ -10,7 +11,6 @@ public sealed class WordRibbonCallbacks
     private readonly WordPluginController _controller;
     private readonly IWordStatusSink _statusSink;
     private readonly Action? _showTaskPane;
-    private int _runningCommand;
     private CancellationTokenSource? _ocrCancellation;
     private int _ocrRunning;
 
@@ -33,6 +33,11 @@ public sealed class WordRibbonCallbacks
     public void OnInsertOmml(object control)
     {
         FireAndForgetSerial(ct => _controller.InsertOmmlAsync(ct));
+    }
+
+    public void OnInsertFromTaskPane(object control)
+    {
+        FireAndForgetSerial(ct => _controller.InsertFromTaskPaneAsync(ct));
     }
 
     public void OnInsertInline(object control)
@@ -105,12 +110,6 @@ public sealed class WordRibbonCallbacks
 
     private void FireAndForgetSerial(Func<CancellationToken, Task> action, string startMessage)
     {
-        if (Interlocked.Exchange(ref _runningCommand, 1) == 1)
-        {
-            _statusSink.Post(WordStatusKind.Info, startMessage);
-            return;
-        }
-
         _ = RunSerialAsync(action, startMessage);
     }
 
@@ -118,9 +117,21 @@ public sealed class WordRibbonCallbacks
     {
         try
         {
-            _statusSink.SetBusy(true);
-            _statusSink.Post(WordStatusKind.Info, startMessage);
-            await action(CancellationToken.None);
+            using var timeout = OfficeCommandTimeouts.CreateStandardCommandTokenSource();
+            bool ran = await _controller.TryRunCommandAsync(async ct =>
+            {
+                _statusSink.SetBusy(true);
+                _statusSink.Post(WordStatusKind.Info, startMessage);
+                await action(ct).ConfigureAwait(true);
+            }, timeout.Token).ConfigureAwait(true);
+            if (!ran)
+            {
+                _statusSink.Post(WordStatusKind.Info, startMessage);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _statusSink.Post(WordStatusKind.Error, WordAddInText.Get("CommandTimeoutStatus"));
         }
         catch (Exception exc)
         {
@@ -129,7 +140,6 @@ public sealed class WordRibbonCallbacks
         finally
         {
             _statusSink.SetBusy(false);
-            Interlocked.Exchange(ref _runningCommand, 0);
         }
     }
 
@@ -139,7 +149,13 @@ public sealed class WordRibbonCallbacks
         {
             _statusSink.SetOcrActive(true);
             _statusSink.Post(WordStatusKind.Info, WordAddInText.Get("OcrWaitingStatus"));
-            await _controller.RecognizeScreenshotAsync(cancellation.Token);
+            bool ran = await _controller.TryRunCommandAsync(
+                ct => _controller.RecognizeScreenshotAsync(ct),
+                cancellation.Token).ConfigureAwait(true);
+            if (!ran)
+            {
+                _statusSink.Post(WordStatusKind.Info, WordAddInText.Get("WorkingStatus"));
+            }
         }
         catch (OperationCanceledException)
         {

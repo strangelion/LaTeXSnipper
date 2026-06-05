@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import copy
+from functools import lru_cache
 import importlib.util
 import os
 from pathlib import Path
-import copy
 
 from backend.typst_utils import clean_typst_to_latex_output, _strip_typst_grouping_for_reverse
 from exporting.formula_format_helpers import (
@@ -102,14 +103,8 @@ def latex_to_omml(latex: str) -> str:
     from lxml import etree
 
     mathml = mathml_standardize(latex2mathml.converter.convert(latex))
-    xsl_path = _find_mml2omml_xsl()
-    if xsl_path is None:
-        raise RuntimeError("Microsoft MML2OMML.XSL was not found; cannot export real OMML")
-
-    xsl_doc = etree.parse(str(xsl_path))
-    transform = etree.XSLT(xsl_doc)
     mathml_doc = etree.fromstring(mathml.encode("utf-8"))
-    omml_doc = transform(mathml_doc)
+    omml_doc = _cached_mml2omml_transform()(mathml_doc)
     result = etree.tostring(omml_doc, encoding="unicode")
     if not _looks_like_omml(result):
         raise RuntimeError("MML2OMML conversion did not produce OMML")
@@ -128,6 +123,17 @@ def _find_mml2omml_xsl() -> Path | None:
         if path.is_file():
             return path
     return None
+
+
+@lru_cache(maxsize=1)
+def _cached_mml2omml_transform():
+    from lxml import etree
+
+    xsl_path = _find_mml2omml_xsl()
+    if xsl_path is None:
+        raise RuntimeError("Microsoft MML2OMML.XSL was not found; cannot export real OMML")
+    xsl_doc = etree.parse(str(xsl_path))
+    return etree.XSLT(xsl_doc)
 
 
 def _looks_like_omml(value: str) -> bool:

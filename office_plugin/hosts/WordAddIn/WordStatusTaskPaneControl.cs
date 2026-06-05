@@ -13,7 +13,7 @@ namespace LaTeXSnipper.OfficePlugin.WordAddIn;
 
 public sealed class WordStatusTaskPaneControl : UserControl, IWordStatusSink, IWordFormulaOptionsProvider
 {
-    private const string TaskPaneHostName = "latexsnipper.officeplugin.local";
+    private const string TaskPaneHostName = "latexsnipper-word.officeplugin.local";
     private const string DefaultLatex = "e^{i\\pi}+1=0";
 
     private readonly JavaScriptSerializer _serializer = new JavaScriptSerializer();
@@ -195,7 +195,7 @@ public sealed class WordStatusTaskPaneControl : UserControl, IWordStatusSink, IW
             CoreWebView2HostResourceAccessKind.Allow);
         _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
         _webView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
-        _webView.Source = new Uri("https://" + TaskPaneHostName + "/taskpane.html");
+        _webView.Source = new Uri("https://" + TaskPaneHostName + "/taskpane.html?_=" + DateTime.UtcNow.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     private async void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
@@ -353,25 +353,7 @@ public sealed class WordStatusTaskPaneControl : UserControl, IWordStatusSink, IW
 
     private static string ResolveAssetsRoot()
     {
-        string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        string copied = Path.Combine(baseDirectory, "EditorAssets");
-        if (File.Exists(Path.Combine(copied, "taskpane.html")))
-        {
-            return copied;
-        }
-
-        string? current = baseDirectory;
-        for (int i = 0; i < 8 && current != null; i++)
-        {
-            string candidate = Path.Combine(current, "office_plugin", "hosts", "WordAddIn", "EditorAssets");
-            if (File.Exists(Path.Combine(candidate, "taskpane.html")))
-            {
-                return candidate;
-            }
-
-            current = Directory.GetParent(current)?.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Task pane assets were not found.");
+        return InstalledAssetResolver.FindAssetRoot("taskpane.html")
+            ?? throw new DirectoryNotFoundException("Task pane assets were not found.");
     }
 }

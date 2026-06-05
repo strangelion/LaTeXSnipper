@@ -1,7 +1,9 @@
 using System;
 using System.Threading;
+using LaTeXSnipper.OfficePlugin.Abstractions;
 using LaTeXSnipper.OfficePlugin.Bridge;
 using LaTeXSnipper.OfficePlugin.Editor;
+using LaTeXSnipper.OfficePlugin.Rendering;
 
 namespace LaTeXSnipper.OfficePlugin.PowerPointAddIn;
 
@@ -17,21 +19,24 @@ public static class PowerPointAddInFactory
         IPowerPointFormulaOptionsProvider? optionsProvider = null)
     {
         statusSink ??= NullPowerPointStatusSink.Instance;
-        var editor = new PowerPointFormulaEditor();
+        var editor = new MathLiveFormulaEditor(CreateEditorOptions());
         var editorSession = new FormulaEditorSession(editor);
         var bridgeClient = new BridgeClient(CreateBridgeOptions());
         var adapter = new DynamicPowerPointApplicationAdapter(powerPointApplication);
-        var controller = new PowerPointPluginController(editorSession, bridgeClient, adapter, statusSink, optionsProvider);
-        editor.FormulaAccepted += async (_, accepted) =>
+        var oleIntermediateRenderer = new MathJaxSvgRenderer(new WebView2MathJaxJavaScriptRuntime("PowerPointAddIn"));
+        var olePresentationPipeline = new OlePresentationPipeline(new IOlePresentationRenderer[] { new EnhancedMetafilePresentationRenderer() });
+        var controller = new PowerPointPluginController(
+            editorSession,
+            bridgeClient,
+            adapter,
+            oleIntermediateRenderer,
+            olePresentationPipeline,
+            statusSink,
+            optionsProvider);
+        editor.FormulaSubmitting += async accepted =>
         {
-            try
-            {
-                await controller.AcceptEditorFormulaAsync(accepted, CancellationToken.None);
-            }
-            catch (Exception exc)
-            {
-                statusSink.Post(PowerPointStatusKind.Error, exc.Message);
-            }
+            using var timeout = OfficeCommandTimeouts.CreateStandardCommandTokenSource();
+            return await controller.TryAcceptEditorFormulaAsync(accepted, timeout.Token).ConfigureAwait(true);
         };
         editor.EditorCancelled += (_, _) => optionsProvider?.ResetFormulaDraft();
         editor.EditorError += (_, message) => statusSink.Post(PowerPointStatusKind.Error, message);
@@ -45,6 +50,25 @@ public static class PowerPointAddInFactory
         return new BridgeOptions(new Uri(normalized))
         {
             Token = Environment.GetEnvironmentVariable(BridgeTokenEnvironmentVariable) ?? string.Empty,
+        };
+    }
+
+    private static MathLiveFormulaEditorOptions CreateEditorOptions()
+    {
+        return new MathLiveFormulaEditorOptions(
+            "latexsnipper-powerpoint.officeplugin.local",
+            "PowerPointEditorWebView2",
+            new[] { @"office_plugin\hosts\PowerPointAddIn\EditorAssets" },
+            new[]
+            {
+                @"Software\Microsoft\Office\PowerPoint\Addins\LaTeXSnipper.OfficePlugin.PowerPointVstoAddIn",
+                @"Software\Microsoft\Office\16.0\PowerPoint\Addins\LaTeXSnipper.OfficePlugin.PowerPointVstoAddIn",
+                @"Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\PowerPoint\Addins\LaTeXSnipper.OfficePlugin.PowerPointVstoAddIn",
+                @"Software\Microsoft\Office\ClickToRun\REGISTRY\MACHINE\Software\Microsoft\Office\16.0\PowerPoint\Addins\LaTeXSnipper.OfficePlugin.PowerPointVstoAddIn",
+            })
+        {
+            Icon = PowerPointPluginIcon.Load(),
+            ForceDisplayMode = true
         };
     }
 }

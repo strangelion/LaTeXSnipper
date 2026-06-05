@@ -9,12 +9,9 @@ public sealed class DynamicPowerPointApplicationAdapter : IPowerPointApplication
 {
     private const int MsoFalse = 0;
     private const int MsoTrue = -1;
-    private const int MsoTextOrientationHorizontal = 1;
     private const float DefaultLeftPoints = 72f;
     private const float DefaultTopPoints = 96f;
-    private const float NumberGapPoints = 12f;
-    private const float NumberWidthPoints = 54f;
-    private const float NumberFontSize = 18f;
+    private const string OleFormulaProgId = "LaTeXSnipper.Formula";
 
     private readonly dynamic _application;
 
@@ -37,14 +34,11 @@ public sealed class DynamicPowerPointApplicationAdapter : IPowerPointApplication
         }
 
         dynamic slide = GetActiveSlide();
-        float totalWidth = metadata.NumberingMode == NumberingMode.None
-            ? image.WidthPoints
-            : image.WidthPoints + NumberGapPoints + NumberWidthPoints;
-        InsertionPoint insertionPoint = GetInsertionPoint(slide, totalWidth, image.HeightPoints);
+        InsertionPoint insertionPoint = GetInsertionPoint(slide, image.WidthPoints, image.HeightPoints);
         return InsertPictureAtAsync(slide, image, metadata, insertionPoint.Left, insertionPoint.Top);
     }
 
-    public Task InsertFormulaImageAtPositionAsync(PowerPointRenderedImage image, FormulaMetadata metadata, float left, float top, CancellationToken cancellationToken)
+    public Task InsertFormulaImageAtPositionAsync(PowerPointRenderedImage image, FormulaMetadata metadata, float left, float top, float scale, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (image == null)
@@ -57,22 +51,103 @@ public sealed class DynamicPowerPointApplicationAdapter : IPowerPointApplication
             throw new ArgumentNullException(nameof(metadata));
         }
 
+        if (scale <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(scale), "Shape scale must be positive.");
+        }
+
         dynamic slide = GetActiveSlide();
-        return InsertPictureAtAsync(slide, image, metadata, left, top);
+        return InsertPictureAtAsync(
+            slide,
+            image,
+            metadata,
+            left,
+            top,
+            image.WidthPoints * scale,
+            image.HeightPoints * scale);
+    }
+
+    public Task InsertOleFormulaObjectAsync(FormulaMetadata metadata, OlePresentationResult presentation, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (metadata == null)
+        {
+            throw new ArgumentNullException(nameof(metadata));
+        }
+
+        if (presentation == null)
+        {
+            throw new ArgumentNullException(nameof(presentation));
+        }
+
+        dynamic slide = GetActiveSlide();
+        InsertionPoint insertionPoint = GetInsertionPoint(slide, (float)presentation.WidthPoints, (float)presentation.HeightPoints);
+        return InsertOleObjectAtAsync(slide, metadata, presentation, insertionPoint.Left, insertionPoint.Top);
+    }
+
+    public Task InsertOleFormulaObjectAtPositionAsync(FormulaMetadata metadata, OlePresentationResult presentation, float left, float top, float shapeScale, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (metadata == null)
+        {
+            throw new ArgumentNullException(nameof(metadata));
+        }
+
+        if (presentation == null)
+        {
+            throw new ArgumentNullException(nameof(presentation));
+        }
+
+        if (shapeScale <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(shapeScale), "Shape scale must be positive.");
+        }
+
+        dynamic slide = GetActiveSlide();
+        return InsertOleObjectAtAsync(
+            slide,
+            metadata,
+            presentation,
+            left,
+            top,
+            (float)presentation.WidthPoints * shapeScale,
+            (float)presentation.HeightPoints * shapeScale);
     }
 
     private static Task InsertPictureAtAsync(dynamic slide, PowerPointRenderedImage image, FormulaMetadata metadata, float left, float top)
     {
-        dynamic picture = slide.Shapes.AddPicture(image.Path, MsoFalse, MsoTrue, left, top, image.WidthPoints, image.HeightPoints);
-        PowerPointFormulaMetadataStore.ApplyToShape(picture, metadata);
+        return InsertPictureAtAsync(slide, image, metadata, left, top, image.WidthPoints, image.HeightPoints);
+    }
 
-        if (metadata.NumberingMode != NumberingMode.None)
-        {
-            dynamic label = AddNumberLabel(slide, metadata, left + image.WidthPoints + NumberGapPoints, top, image.HeightPoints);
-            dynamic group = slide.Shapes.Range(new[] { (string)picture.Name, (string)label.Name }).Group();
-            PowerPointFormulaMetadataStore.ApplyToShape(group, metadata);
-        }
+    private static Task InsertPictureAtAsync(dynamic slide, PowerPointRenderedImage image, FormulaMetadata metadata, float left, float top, float width, float height)
+    {
+        dynamic picture = slide.Shapes.AddPicture(image.Path, MsoFalse, MsoTrue, left, top, width, height);
+        PowerPointFormulaMetadataStore.ApplyToShape(picture, metadata, image.WidthPoints, image.HeightPoints);
+        PowerPointFormulaMetadataStore.ApplyImagePath(picture, image.Path);
+        return Task.CompletedTask;
+    }
 
+    private static Task InsertOleObjectAtAsync(dynamic slide, FormulaMetadata metadata, OlePresentationResult presentation, float left, float top)
+    {
+        return InsertOleObjectAtAsync(slide, metadata, presentation, left, top, (float)presentation.WidthPoints, (float)presentation.HeightPoints);
+    }
+
+    private static Task InsertOleObjectAtAsync(dynamic slide, FormulaMetadata metadata, OlePresentationResult presentation, float left, float top, float width, float height)
+    {
+        OleFormulaPendingPayloadStore.SavePendingPayload(metadata, presentation);
+        dynamic shape = slide.Shapes.AddOLEObject(
+            left,
+            top,
+            width,
+            height,
+            OleFormulaProgId,
+            string.Empty,
+            MsoFalse,
+            string.Empty,
+            0,
+            string.Empty,
+            MsoFalse);
+        PowerPointFormulaMetadataStore.ApplyToShape(shape, metadata, (float)presentation.WidthPoints, (float)presentation.HeightPoints);
         return Task.CompletedTask;
     }
 
@@ -83,17 +158,11 @@ public sealed class DynamicPowerPointApplicationAdapter : IPowerPointApplication
         return Task.FromResult(ReadMetadataFromShape(shape));
     }
 
-    public (float Left, float Top) GetSelectedShapePosition()
+    public (float Left, float Top, float ShapeScale) GetSelectedShapeFrame()
     {
         dynamic shape = GetSelectedShape();
-        try
-        {
-            return ((float)shape.Left, (float)shape.Top);
-        }
-        catch
-        {
-            return (DefaultLeftPoints, DefaultTopPoints);
-        }
+        float naturalWidth = ReadRequiredFloatTag(shape, PowerPointFormulaMetadataStore.NaturalWidthPointsTag);
+        return ((float)shape.Left, (float)shape.Top, (float)shape.Width / naturalWidth);
     }
 
     public Task DeleteSelectedFormulaAsync(CancellationToken cancellationToken)
@@ -105,8 +174,40 @@ public sealed class DynamicPowerPointApplicationAdapter : IPowerPointApplication
         return Task.CompletedTask;
     }
 
+    public Task<int> DeleteSelectedFormulasAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var shapes = new System.Collections.Generic.List<object>(GetSelectedFormulaShapes());
+        if (shapes.Count == 0)
+        {
+            throw new InvalidOperationException(PowerPointAddInText.Get("SelectedFormulaRequired"));
+        }
+
+        foreach (object item in shapes)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            dynamic shape = item;
+            CleanupImageFile(shape);
+            shape.Delete();
+        }
+
+        return Task.FromResult(shapes.Count);
+    }
+
     private dynamic GetSelectedShape()
     {
+        var shapes = new System.Collections.Generic.List<object>(GetSelectedFormulaShapes());
+        if (shapes.Count > 0)
+        {
+            return shapes[0];
+        }
+
+        throw new InvalidOperationException(PowerPointAddInText.Get("SelectedFormulaRequired"));
+    }
+
+    private System.Collections.Generic.IReadOnlyList<object> GetSelectedFormulaShapes()
+    {
+        var shapes = new System.Collections.Generic.List<object>();
         try
         {
             dynamic selection = _application.ActiveWindow.Selection;
@@ -121,14 +222,15 @@ public sealed class DynamicPowerPointApplicationAdapter : IPowerPointApplication
                 throw new InvalidOperationException(PowerPointAddInText.Get("SelectedFormulaRequired"));
             }
 
-            dynamic shape = shapeRange[1];
-            string equationId = ReadTag(shape, PowerPointFormulaMetadataStore.EquationIdTag);
-            if (string.IsNullOrWhiteSpace(equationId))
+            for (int i = 1; i <= Convert.ToInt32(shapeRange.Count); i++)
             {
-                throw new InvalidOperationException(PowerPointAddInText.Get("SelectedFormulaMetadataMissing"));
+                dynamic shape = shapeRange[i];
+                string equationId = ReadTag(shape, PowerPointFormulaMetadataStore.EquationIdTag);
+                if (!string.IsNullOrWhiteSpace(equationId))
+                {
+                    shapes.Add(shape);
+                }
             }
-
-            return shape;
         }
         catch (InvalidOperationException)
         {
@@ -138,6 +240,8 @@ public sealed class DynamicPowerPointApplicationAdapter : IPowerPointApplication
         {
             throw new InvalidOperationException(PowerPointAddInText.Get("SelectedFormulaRequired"), exc);
         }
+
+        return shapes;
     }
 
     private static FormulaMetadata ReadMetadataFromShape(dynamic shape)
@@ -150,25 +254,17 @@ public sealed class DynamicPowerPointApplicationAdapter : IPowerPointApplication
 
         string latex = ReadTag(shape, PowerPointFormulaMetadataStore.LatexTag);
         string displayModeText = ReadTag(shape, PowerPointFormulaMetadataStore.DisplayModeTag);
-        string numberingModeText = ReadTag(shape, PowerPointFormulaMetadataStore.NumberingModeTag);
-        string numberText = ReadTag(shape, PowerPointFormulaMetadataStore.NumberTextTag);
         string schemaVersionText = ReadTag(shape, PowerPointFormulaMetadataStore.SchemaVersionTag);
 
         FormulaDisplayMode displayMode = displayModeText == "Inline" ? FormulaDisplayMode.Inline : FormulaDisplayMode.Display;
-        NumberingMode numberingMode = numberingModeText switch
-        {
-            "Automatic" => NumberingMode.Automatic,
-            "Manual" => NumberingMode.Manual,
-            _ => NumberingMode.None,
-        };
         int schemaVersion = int.TryParse(schemaVersionText, out int version) ? version : 1;
 
         return new FormulaMetadata(
             new FormulaIdentity("active-presentation", equationId),
             latex,
             displayMode,
-            numberingMode,
-            numberText,
+            NumberingMode.None,
+            string.Empty,
             RenderEngineKind.Image,
             schemaVersion);
     }
@@ -177,25 +273,23 @@ public sealed class DynamicPowerPointApplicationAdapter : IPowerPointApplication
     {
         try
         {
-            string equationId = ReadTag(shape, PowerPointFormulaMetadataStore.EquationIdTag);
-            if (string.IsNullOrWhiteSpace(equationId))
+            string path = ReadTag(shape, PowerPointFormulaMetadataStore.ImagePathTag);
+            if (string.IsNullOrWhiteSpace(path))
             {
                 return;
             }
 
             string tempRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "LaTeXSnipper", "OfficePlugin", "PowerPoint");
-            if (!System.IO.Directory.Exists(tempRoot))
+            string fullPath = System.IO.Path.GetFullPath(path);
+            string fullTempRoot = System.IO.Path.GetFullPath(tempRoot);
+            if (!fullPath.StartsWith(fullTempRoot, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
 
-            foreach (string file in System.IO.Directory.GetFiles(tempRoot, "*.png"))
+            if (System.IO.File.Exists(fullPath))
             {
-                string fileName = System.IO.Path.GetFileNameWithoutExtension(file);
-                if (fileName.Contains(equationId))
-                {
-                    System.IO.File.Delete(file);
-                }
+                System.IO.File.Delete(fullPath);
             }
         }
         catch
@@ -213,6 +307,17 @@ public sealed class DynamicPowerPointApplicationAdapter : IPowerPointApplication
         {
             return string.Empty;
         }
+    }
+
+    private static float ReadRequiredFloatTag(dynamic shape, string tagName)
+    {
+        string value = ReadTag(shape, tagName);
+        if (!float.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float result) || result <= 0)
+        {
+            throw new InvalidOperationException(PowerPointAddInText.Get("SelectedFormulaMetadataMissing"));
+        }
+
+        return result;
     }
 
     private dynamic GetActiveSlide()
@@ -241,22 +346,6 @@ public sealed class DynamicPowerPointApplicationAdapter : IPowerPointApplication
         {
             return new InsertionPoint(DefaultLeftPoints, DefaultTopPoints);
         }
-    }
-
-    private static dynamic AddNumberLabel(dynamic slide, FormulaMetadata metadata, float left, float top, float formulaHeight)
-    {
-        string numberText = string.IsNullOrWhiteSpace(metadata.NumberText) ? "(1)" : metadata.NumberText;
-        dynamic label = slide.Shapes.AddTextbox(
-            MsoTextOrientationHorizontal,
-            left,
-            top,
-            NumberWidthPoints,
-            Math.Max(formulaHeight, NumberFontSize + 8f));
-        label.TextFrame.TextRange.Text = numberText;
-        label.TextFrame.TextRange.Font.Size = NumberFontSize;
-        label.TextFrame.VerticalAnchor = 3;
-        PowerPointFormulaMetadataStore.ApplyToShape(label, metadata);
-        return label;
     }
 
     private readonly struct InsertionPoint

@@ -37,11 +37,33 @@ namespace LaTeXSnipper.OfficePlugin.WordVstoAddIn
                 ribbonCallbacks = new WordRibbonCallbacks(controller, visibleStatusSink, ShowStatusPane);
                 AttachTaskPaneCommands(statusPaneControl, ribbonCallbacks);
                 ribbonExtensibility?.AttachCallbacks(ribbonCallbacks);
+                _ = WarmUpControllerAsync(controller, statusPaneControl);
             }
         }
 
         private void ThisAddIn_Shutdown(object sender, EventArgs e)
         {
+            controller?.Dispose();
+            controller = null;
+        }
+
+        private static async System.Threading.Tasks.Task WarmUpControllerAsync(
+            WordPluginController controller,
+            IWordStatusSink statusSink)
+        {
+            try
+            {
+                using var timeout = new System.Threading.CancellationTokenSource(System.TimeSpan.FromSeconds(20));
+                await controller.WarmUpAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                statusSink.Post(WordStatusKind.Error, WordAddInText.Get("CommandTimeoutStatus"));
+            }
+            catch (Exception exc)
+            {
+                statusSink.Post(WordStatusKind.Error, exc.Message);
+            }
         }
 
         private void ShowStatusPane()
@@ -55,7 +77,7 @@ namespace LaTeXSnipper.OfficePlugin.WordVstoAddIn
         private static void AttachTaskPaneCommands(WordStatusTaskPaneControl pane, WordRibbonCallbacks callbacks)
         {
             pane.ConnectRequested += (_, _) => callbacks.OnConnect(pane);
-            pane.InsertRequested += (_, _) => callbacks.OnInsertOmml(pane);
+            pane.InsertRequested += (_, _) => callbacks.OnInsertFromTaskPane(pane);
             pane.ScreenshotOcrRequested += (_, _) => callbacks.OnScreenshotOcr(pane);
             pane.RenumberRequested += (_, _) => callbacks.OnRenumberAll(pane);
         }

@@ -8,11 +8,17 @@ public interface IPowerPointApplicationAdapter
 {
     Task InsertFormulaImageAsync(PowerPointRenderedImage image, FormulaMetadata metadata, CancellationToken cancellationToken);
 
-    Task InsertFormulaImageAtPositionAsync(PowerPointRenderedImage image, FormulaMetadata metadata, float left, float top, CancellationToken cancellationToken);
+    Task InsertFormulaImageAtPositionAsync(PowerPointRenderedImage image, FormulaMetadata metadata, float left, float top, float scale, CancellationToken cancellationToken);
+
+    Task InsertOleFormulaObjectAsync(FormulaMetadata metadata, OlePresentationResult presentation, CancellationToken cancellationToken);
+
+    Task InsertOleFormulaObjectAtPositionAsync(FormulaMetadata metadata, OlePresentationResult presentation, float left, float top, float shapeScale, CancellationToken cancellationToken);
 
     Task<FormulaMetadata> LoadSelectedFormulaAsync(CancellationToken cancellationToken);
 
     Task DeleteSelectedFormulaAsync(CancellationToken cancellationToken);
 
-    (float Left, float Top) GetSelectedShapePosition();
+    Task<int> DeleteSelectedFormulasAsync(CancellationToken cancellationToken);
+
+    (float Left, float Top, float ShapeScale) GetSelectedShapeFrame();
 }

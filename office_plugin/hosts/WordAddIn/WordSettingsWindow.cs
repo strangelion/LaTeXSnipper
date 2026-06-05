@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
+using LaTeXSnipper.OfficePlugin.Abstractions;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -12,7 +13,7 @@ namespace LaTeXSnipper.OfficePlugin.WordAddIn;
 
 internal sealed class WordSettingsWindow : Form
 {
-    private const string SettingsHostName = "latexsnipper.officeplugin.local";
+    private const string SettingsHostName = "latexsnipper-word.officeplugin.local";
 
     private static WordSettingsWindow? _window;
 
@@ -116,6 +117,9 @@ internal sealed class WordSettingsWindow : Form
             ["type"] = "init",
             ["locale"] = CultureInfo.CurrentUICulture.Name,
             ["numberPlacement"] = settings.NumberPlacement.ToString(),
+            ["numberFormat"] = settings.NumberFormat.ToString(),
+            ["numberEnclosure"] = settings.NumberEnclosure.ToString(),
+            ["insertionBackend"] = settings.InsertionBackend.ToString(),
         });
         string script =
             "(function(payload){" +
@@ -148,32 +152,36 @@ internal sealed class WordSettingsWindow : Form
         string placement = message.TryGetValue("numberPlacement", out object rawPlacement)
             ? Convert.ToString(rawPlacement, CultureInfo.InvariantCulture) ?? string.Empty
             : string.Empty;
-        var settings = new WordPluginSettings(placement == "Left" ? WordNumberPlacement.Left : WordNumberPlacement.Right);
+        string backend = message.TryGetValue("insertionBackend", out object rawBackend)
+            ? Convert.ToString(rawBackend, CultureInfo.InvariantCulture) ?? string.Empty
+            : string.Empty;
+        FormulaInsertionBackend insertionBackend = backend == FormulaInsertionBackend.WordOmml.ToString()
+            ? FormulaInsertionBackend.WordOmml
+            : FormulaInsertionBackend.Ole;
+        string formatRaw = message.TryGetValue("numberFormat", out object rawFormat)
+            ? Convert.ToString(rawFormat, CultureInfo.InvariantCulture) ?? string.Empty
+            : string.Empty;
+        string enclosureRaw = message.TryGetValue("numberEnclosure", out object rawEnclosure)
+            ? Convert.ToString(rawEnclosure, CultureInfo.InvariantCulture) ?? string.Empty
+            : string.Empty;
+        WordNumberFormat numberFormat = Enum.TryParse(formatRaw, out WordNumberFormat parsedFormat)
+            ? parsedFormat
+            : WordNumberFormat.Arabic;
+        WordNumberEnclosure numberEnclosure = Enum.TryParse(enclosureRaw, out WordNumberEnclosure parsedEnclosure)
+            ? parsedEnclosure
+            : WordNumberEnclosure.Parentheses;
+        var settings = new WordPluginSettings(
+            placement == "Left" ? WordNumberPlacement.Left : WordNumberPlacement.Right,
+            insertionBackend,
+            numberFormat,
+            numberEnclosure);
         settings.Save();
         _ = SendSettingsAsync();
     }
 
     private static string ResolveAssetsRoot()
     {
-        string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        string copied = Path.Combine(baseDirectory, "EditorAssets");
-        if (File.Exists(Path.Combine(copied, "settings.html")))
-        {
-            return copied;
-        }
-
-        string? current = baseDirectory;
-        for (int i = 0; i < 8 && current != null; i++)
-        {
-            string candidate = Path.Combine(current, "office_plugin", "hosts", "WordAddIn", "EditorAssets");
-            if (File.Exists(Path.Combine(candidate, "settings.html")))
-            {
-                return candidate;
-            }
-
-            current = Directory.GetParent(current)?.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Office plugin settings assets were not found.");
+        return InstalledAssetResolver.FindAssetRoot("settings.html")
+            ?? throw new DirectoryNotFoundException("Office plugin settings assets were not found.");
     }
 }
