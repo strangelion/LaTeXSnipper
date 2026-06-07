@@ -100,7 +100,7 @@ class ExternalModelPdfWorker(QObject):
             self.failed.emit(f"PDF 打开失败: {e}")
             return
 
-	asset_store = (
+        asset_store = (
             PdfAssetStore(task_id="latest", overwrite_existing=True)
             if self.document_mode == "parse"
             else None
