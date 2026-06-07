@@ -21,6 +21,7 @@ class ExternalModelPdfWorker(QObject):
         output_format: str,
         dpi: int = 200,
         document_mode: str = "document",
+        page_numbers: list[int] | None = None,
     ):
         super().__init__()
         self.config = config
@@ -32,6 +33,7 @@ class ExternalModelPdfWorker(QObject):
         self._cancelled = False
         self.elapsed = None
         self.structured_result = None
+        self._page_numbers = page_numbers  # 1-based page numbers, None = use max_pages
 
     def cancel(self):
         self._cancelled = True
@@ -45,11 +47,19 @@ class ExternalModelPdfWorker(QObject):
 
         if self.config.normalized_provider() == "mineru":
             try:
-                total = max(int(self.max_pages or 1), 1)
+                # Mineru supports only contiguous page ranges, not arbitrary sets
+                if self._page_numbers is not None:
+                    start_page = min(self._page_numbers)
+                    end_page = max(self._page_numbers)
+                    total = end_page - start_page + 1
+                else:
+                    start_page = 1
+                    total = max(int(self.max_pages or 1), 1)
+                    end_page = start_page + total - 1
                 asset_store = PdfAssetStore(task_id="latest", overwrite_existing=True)
                 pipeline = ExternalDocumentPipeline(self.config, self.output_format, "parse", asset_store=asset_store)
                 self.progress.emit(0, total)
-                result = MineruClient(self.config).parse_pdf(self.pdf_path, total)
+                result = MineruClient(self.config).parse_pdf(self.pdf_path, total, start_page_id=start_page, end_page_id=end_page)
                 page_result = pipeline.process_result(result, 1, "ocr_document_parse_v1")
                 content = pipeline.compose_document([page_result] if page_result else [])
                 self.structured_result = pipeline.build_structured_result()
@@ -90,29 +100,38 @@ class ExternalModelPdfWorker(QObject):
             self.failed.emit(f"PDF 打开失败: {e}")
             return
 
-        asset_store = (
+	asset_store = (
             PdfAssetStore(task_id="latest", overwrite_existing=True)
             if self.document_mode == "parse"
             else None
         )
         pipeline = ExternalDocumentPipeline(self.config, self.output_format, self.document_mode, asset_store=asset_store)
-        total = min(max(int(self.max_pages or 1), 1), doc.page_count or 1)
+
+        # Determine page indices to process
+        if self._page_numbers is not None:
+            total_pages_in_doc = doc.page_count or 1
+            indices = [p - 1 for p in self._page_numbers if 1 <= p <= total_pages_in_doc]
+        else:
+            total = min(max(int(self.max_pages or 1), 1), doc.page_count or 1)
+            indices = list(range(total))
+
+        total = len(indices)
         results = []
         try:
-            for i in range(total):
+            for render_idx, page_idx in enumerate(indices):
                 if self._cancelled or QThread.currentThread().isInterruptionRequested():
                     if asset_store is not None:
                         asset_store.cleanup()
                     _set_elapsed()
                     self.failed.emit("已取消")
                     return
-                page = doc.load_page(i)
+                page = doc.load_page(page_idx)
                 pix = page.get_pixmap(dpi=int(max(self.dpi, 72)), alpha=False)
                 image = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-                page_result = pipeline.process_page(image, i + 1, self.config.prompt_template)
+                page_result = pipeline.process_page(image, page_idx + 1, self.config.prompt_template)
                 if page_result:
                     results.append(page_result)
-                self.progress.emit(i + 1, total)
+                self.progress.emit(render_idx + 1, total)
                 if self._cancelled or QThread.currentThread().isInterruptionRequested():
                     if asset_store is not None:
                         asset_store.cleanup()

@@ -84,6 +84,7 @@ class PdfPredictWorker(QObject):
         model_name: str,
         output_format: str,
         dpi: int = 200,
+        page_numbers: list[int] | None = None,
     ):
         super().__init__()
         self.model_wrapper = model_wrapper
@@ -94,6 +95,7 @@ class PdfPredictWorker(QObject):
         self.dpi = dpi
         self._cancelled = False
         self.elapsed = None
+        self._page_numbers = page_numbers  # 1-based page numbers, None = use max_pages
 
     def cancel(self):
         self._cancelled = True
@@ -118,15 +120,28 @@ class PdfPredictWorker(QObject):
             self.failed.emit(f"PDF 打开失败: {exc}")
             return
 
-        total = min(max(self.max_pages, 1), doc.page_count or 1)
+        if self._page_numbers is not None:
+            # Use specified page numbers (1-based), clipped to valid range
+            total_pages_in_doc = doc.page_count or 1
+            indices = [p - 1 for p in self._page_numbers if 1 <= p <= total_pages_in_doc]
+            total = len(indices)
+        else:
+            # Fall back to first max_pages pages
+            total = min(max(self.max_pages, 1), doc.page_count or 1)
+            indices = list(range(total))
         try:
             doc.close()
         except Exception:
             pass
 
+        if total == 0:
+            _set_elapsed()
+            self.failed.emit("未选择有效页面")
+            return
+
         render_queue = queue.Queue(maxsize=1)
         render_thread = threading.Thread(
-            target=lambda: self._render_pages(fitz, total, render_queue),
+            target=lambda: self._render_pages(fitz, indices, render_queue),
             name="MathCraftPdfRenderPrefetch",
             daemon=True,
         )
@@ -199,17 +214,17 @@ class PdfPredictWorker(QObject):
                 continue
         return False
 
-    def _render_pages(self, fitz, total: int, render_queue: queue.Queue) -> None:
+    def _render_pages(self, fitz, indices: list[int], render_queue: queue.Queue) -> None:
         render_doc = None
         try:
             render_doc = fitz.open(self.pdf_path)
-            for page_index in range(total):
+            for render_idx, page_index in enumerate(indices):
                 if self._cancelled:
                     break
                 page = render_doc.load_page(page_index)
                 pix = page.get_pixmap(dpi=self.dpi, alpha=False)
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                if not self._put_render_item(render_queue, (page_index, img, [pix.width, pix.height])):
+                if not self._put_render_item(render_queue, (render_idx, img, [pix.width, pix.height])):
                     return
             self._put_render_item(render_queue, None)
         except Exception as exc:

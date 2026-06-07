@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, QTimer, Qt
@@ -19,6 +20,42 @@ from ui.window_helpers import (
     select_save_file_with_icon as _select_save_file_with_icon,
 )
 from workers.recognition_workers import PdfPredictWorker
+
+
+def parse_page_range(input_text: str, total_pages: int) -> list[int] | None:
+    """Parse a page range string into a sorted list of 1-based page numbers.
+
+    Supports formats: "5" (single), "1-5" (range), "1,3,5-7" (mixed).
+    Returns None to signal "all pages", empty list for invalid input.
+    """
+    if not input_text or not input_text.strip():
+        return None
+    s = input_text.strip()
+    if re.match(r"^(all|全部|\*)$", s, re.IGNORECASE):
+        return None
+
+    pages: set[int] = set()
+    parts = re.split(r"[,，、\s]+", s)
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        range_match = re.match(r"^(\d+)\s*[-–—]\s*(\d+)$", part)
+        if range_match:
+            start = max(1, int(range_match.group(1)))
+            end = min(total_pages, int(range_match.group(2)))
+            for i in range(start, end + 1):
+                pages.add(i)
+            continue
+        single_match = re.match(r"^(\d+)$", part)
+        if single_match:
+            p = int(single_match.group(1))
+            if 1 <= p <= total_pages:
+                pages.add(p)
+
+    if not pages:
+        return []
+    return sorted(pages)
 
 
 class PdfRecognitionControllerMixin:
@@ -100,12 +137,10 @@ class PdfRecognitionControllerMixin:
 
         default_pages = min(total_pages, 5) if total_pages > 0 else 1
         page_dlg = QInputDialog(self)
-        page_dlg.setWindowTitle("选择页数")
-        page_dlg.setLabelText(f"PDF 共 {total_pages} 页，选择要识别的页数：")
-        page_dlg.setInputMode(QInputDialog.InputMode.IntInput)
-        page_dlg.setIntRange(1, max(total_pages, 1))
-        page_dlg.setIntValue(default_pages)
-        page_dlg.setIntStep(1)
+        page_dlg.setWindowTitle("选择识别页面")
+        page_dlg.setLabelText(f"PDF 共 {total_pages} 页，请选择要识别的页面：\n支持格式：1-5、1,3,5-7、3（全部 = 1-{total_pages}）")
+        page_dlg.setInputMode(QInputDialog.InputMode.TextInput)
+        page_dlg.setTextValue(f"1-{default_pages}")
         page_dlg.setWindowFlags(
             (
                 page_dlg.windowFlags()
@@ -126,7 +161,17 @@ class PdfRecognitionControllerMixin:
         _apply_app_window_icon(page_dlg)
         if page_dlg.exec() != int(QDialog.DialogCode.Accepted):
             return
-        pages = page_dlg.intValue()
+        raw = page_dlg.textValue()
+        parsed = parse_page_range(raw, total_pages)
+        if parsed is None:
+            pages = total_pages
+            page_numbers = None
+        elif len(parsed) == 0:
+            custom_warning_dialog("提示", f"无效的页码范围：{raw}。请使用格式如 1-5、1,3,5-7 或 3。", self)
+            return
+        else:
+            pages = len(parsed)
+            page_numbers = parsed
 
         opts = self._prompt_pdf_output_options()
         if not opts:
@@ -157,9 +202,10 @@ class PdfRecognitionControllerMixin:
                 fmt_key,
                 dpi,
                 doc_mode,
+                page_numbers=page_numbers,
             )
         else:
-            self.pdf_predict_worker = PdfPredictWorker(self.model, str(path), pages, self.current_model, fmt_key, dpi)
+            self.pdf_predict_worker = PdfPredictWorker(self.model, str(path), pages, self.current_model, fmt_key, dpi, page_numbers=page_numbers)
         self.pdf_predict_worker.moveToThread(self.pdf_predict_thread)
 
         progress_text = "正在解析 PDF 文档结构..." if doc_mode == "parse" else "正在识别 PDF..."
