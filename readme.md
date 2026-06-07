@@ -17,11 +17,11 @@
 [![Last Commit](https://img.shields.io/github/last-commit/SakuraMathcraft/LaTeXSnipper?style=flat-square)](https://github.com/SakuraMathcraft/LaTeXSnipper/commits)
 [![Activity](https://img.shields.io/github/commit-activity/m/SakuraMathcraft/LaTeXSnipper?style=flat-square&label=Activity)](https://github.com/SakuraMathcraft/LaTeXSnipper/graphs/commit-activity)
 
-[FAQ](docs/faq.md) · [Releases](https://github.com/SakuraMathcraft/LaTeXSnipper/releases)
-
 ### Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=SakuraMathcraft/LaTeXSnipper&type=Date)](https://star-history.com/#SakuraMathcraft/LaTeXSnipper&Date)
+
+[FAQ](docs/faq.md) · [Releases](https://github.com/SakuraMathcraft/LaTeXSnipper/releases)
 
 </div>
 
@@ -45,18 +45,21 @@
 
 ---
 
-## Office Integration Direction
+## Microsoft Office Plugin
 
-The active Office integration is the Windows-native `office_plugin` line. It targets Windows desktop Office:
+LaTeXSnipper provides a released Windows plugin for desktop Microsoft Word and PowerPoint:
 
-- Word: native OMML insertion and LaTeXSnipper OLE formula objects
-- PowerPoint: current compatible image insertion and LaTeXSnipper OLE formula objects
-- Local TeX rendering pipeline for self-rendered formula objects
-- Per-formula persisted LaTeX source, render options, numbering data, and object identity
-- Native Ribbon, shortcuts, double-click editing, update, delete, and renumber workflows
-- Native Bridge endpoint defaults to `http://127.0.0.1:28765/`
+- Word OLE and native OMML formula insertion
+- PowerPoint OLE and PNG formula insertion
+- Shared MathLive editor and extensive symbol/formula library
+- Formula loading, update, deletion, automatic numbering, and renumbering
+- Persisted LaTeX source, rendering options, numbering data, and formula identity
+- Local vector rendering for OLE formulas
+- Screenshot recognition through the local desktop Bridge
 
-See [Windows native Office plugin design](docs/office_plugin_design.md).
+Download `OfficePluginSetup-<version>.exe` from [Releases](https://github.com/SakuraMathcraft/LaTeXSnipper/releases). The plugin supports 32-bit and 64-bit desktop Office 2019, 2021, 2024, LTSC 2021/2024, and Microsoft 365 Apps on Windows.
+
+See the [Office plugin documentation](office_plugin/README.md) for requirements and release build details.
 
 ---
 
@@ -94,8 +97,6 @@ Optional Pandoc export formats are enabled after installing the `PANDOC` layer i
 - RTF, plain text, standalone HTML, LaTeX `.tex`, Typst `.typ`
 - GitHub Markdown, CommonMark, reStructuredText
 - MediaWiki, DokuWiki, Org-mode, Textile, Jira Wiki, and man page output
-
-Pandoc is optional. If it is not installed, the core recognition, editing, handwriting, preview, and built-in export formats continue to work normally.
 
 ---
 
@@ -166,9 +167,6 @@ support. Debian/Ubuntu `.deb` installs declare `python3` and `python3-venv`;
 macOS users should install Python through Homebrew (`brew install python`) or
 the official python.org macOS installer when the system does not provide a
 usable `python3`.
-The dependency wizard shows its UI before running `ensurepip`, `pip` upgrade,
-or `setuptools`/`wheel` repair; those steps run after the user starts dependency
-installation.
 
 ---
 
@@ -191,9 +189,6 @@ Before requesting review, run:
 .\tools\deps\python311\python.exe -m pyright
 .\tools\deps\python311\python.exe -m compileall -q src mathcraft_ocr test
 ```
-
-Cross-platform PRs must not change the Windows dependency surface or installer
-behavior unless Windows is explicitly in scope and separately validated.
 
 ---
 
