@@ -1,6 +1,7 @@
 // office_plugin/hosts/WpsAddIn/src/main.js
 class LaTeXSnipperPlugin {
   constructor() {
+    this.taskPane = null;
     this.init();
   }
 
@@ -23,6 +24,8 @@ class LaTeXSnipperPlugin {
   }
 
   createRibbon() {
+    // WPS JSAPI ribbon creation would go here
+    // This is a placeholder - actual implementation depends on WPS API
     console.log('Ribbon buttons created');
   }
 
