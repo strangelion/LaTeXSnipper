@@ -26,34 +26,38 @@ class TaskPane {
 
     try {
       const response = await fetch(`../../shared/core/i18n/${lang}.json`);
-      const translations = await response.json();
-
-      document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        const keys = key.split('.');
-        let value = translations;
-        for (const k of keys) {
-          value = value?.[k];
-        }
-        if (value) {
-          el.textContent = value;
-        }
-      });
-
-      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-        const key = el.getAttribute('data-i18n-placeholder');
-        const keys = key.split('.');
-        let value = translations;
-        for (const k of keys) {
-          value = value?.[k];
-        }
-        if (value) {
-          el.placeholder = value;
-        }
-      });
+      this.translations = await response.json();
+      this.applyTranslations();
     } catch (error) {
       console.warn('Failed to load translations:', error);
+      this.translations = {};
     }
+  }
+
+  applyTranslations() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      const value = this.resolveKey(this.translations, key);
+      if (value) {
+        el.textContent = value;
+      }
+    });
+
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      const key = el.getAttribute('data-i18n-placeholder');
+      const value = this.resolveKey(this.translations, key);
+      if (value) {
+        el.placeholder = value;
+      }
+    });
+  }
+
+  resolveKey(obj, path) {
+    return path.split('.').reduce((v, k) => v?.[k], obj);
+  }
+
+  t(key) {
+    return this.resolveKey(this.translations, key) || key;
   }
 
   initEditor() {
@@ -104,10 +108,10 @@ class TaskPane {
 
     if (connected) {
       dot.classList.remove('disconnected');
-      text.textContent = '已连接到 Bridge';
+      text.textContent = this.t('status.connected');
     } else {
       dot.classList.add('disconnected');
-      text.textContent = 'Bridge 不可用，使用本地渲染器';
+      text.textContent = this.t('status.disconnected');
     }
   }
 
@@ -143,7 +147,7 @@ class TaskPane {
     const parsed = this.latexParser.parse(this.currentLatex);
 
     if (!parsed.valid) {
-      alert('LaTeX 语法无效: ' + parsed.error);
+      alert(this.t('errors.invalidLatex') + ': ' + parsed.error);
       return;
     }
 
@@ -154,7 +158,7 @@ class TaskPane {
       });
 
       if (!result.ok) {
-        alert('转换失败: ' + result.error.message);
+        alert(this.t('errors.insertFailed') + ': ' + result.error.message);
         return;
       }
 
@@ -163,7 +167,7 @@ class TaskPane {
       } else if (type === 'png' && result.result.png) {
         await this.documentAdapter.insertImage(result.result.png);
       } else {
-        alert('无法插入公式');
+        alert(this.t('errors.insertFailed'));
         return;
       }
 
@@ -172,7 +176,7 @@ class TaskPane {
       this.updatePreview();
 
     } catch (error) {
-      alert('插入公式失败: ' + error.message);
+      alert(this.t('errors.insertFailed') + ': ' + error.message);
     }
   }
 }
