@@ -18,6 +18,42 @@ class TaskPane {
     this.initSymbolLibrary();
     this.initEventListeners();
     await this.connectBridge();
+    await this.initI18n();
+  }
+
+  async initI18n() {
+    const lang = navigator.language.startsWith('zh') ? 'zh' : 'en';
+
+    try {
+      const response = await fetch(`../../shared/core/i18n/${lang}.json`);
+      const translations = await response.json();
+
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        const keys = key.split('.');
+        let value = translations;
+        for (const k of keys) {
+          value = value?.[k];
+        }
+        if (value) {
+          el.textContent = value;
+        }
+      });
+
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        const keys = key.split('.');
+        let value = translations;
+        for (const k of keys) {
+          value = value?.[k];
+        }
+        if (value) {
+          el.placeholder = value;
+        }
+      });
+    } catch (error) {
+      console.warn('Failed to load translations:', error);
+    }
   }
 
   initEditor() {
