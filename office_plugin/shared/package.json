@@ -1,0 +1,12 @@
+{
+  "name": "latexsnipper-office-shared",
+  "version": "1.0.0",
+  "description": "Shared core modules for LaTeXSnipper Office plugins",
+  "main": "core/index.js",
+  "scripts": {
+    "test": "jest --config jest.config.js"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
