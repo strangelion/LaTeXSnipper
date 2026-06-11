@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LaTeXSnipper</title>
+  <link rel="stylesheet" href="../../shared/styles/common.css">
+  <style>
+    .taskpane {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .editor-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .preview-section {
+      min-height: 100px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 8px;
+      margin-top: 8px;
+      background: white;
+    }
+    .actions-section {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .actions-section button {
+      flex: 1;
+    }
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success-color);
+    }
+    .status-dot.disconnected {
+      background: var(--error-color);
+    }
+  </style>
+</head>
+<body>
+  <div class="taskpane">
+    <div class="taskpane-header">
+      <h3 style="margin: 0;">LaTeXSnipper</h3>
+      <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-secondary);" data-i18n="app.description">
+        在 WPS 文档中插入 LaTeX 公式
+      </p>
+    </div>
+
+    <div class="taskpane-content">
+      <div class="editor-section">
+        <div class="form-group">
+          <label class="form-label" data-i18n="editor.label">LaTeX 公式</label>
+          <textarea
+            id="latex-input"
+            class="form-input"
+            rows="4"
+            placeholder="输入 LaTeX 公式..."
+            data-i18n-placeholder="editor.placeholder"
+          ></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" data-i18n="symbols.label">符号库</label>
+          <div id="symbol-library"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" data-i18n="editor.preview">预览</label>
+          <div id="preview" class="preview-section"></div>
+        </div>
+
+        <div class="actions-section">
+          <button id="btn-insert-omml" class="btn btn-primary" data-i18n="actions.insertOmml">
+            插入公式 (OMML)
+          </button>
+          <button id="btn-insert-image" class="btn btn-secondary" data-i18n="actions.insertImage">
+            插入公式 (图片)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="taskpane-footer">
+      <div class="status-bar">
+        <div id="status-dot" class="status-dot"></div>
+        <span id="status-text" data-i18n="status.disconnected">Bridge 不可用，使用本地渲染器</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="../../shared/core/bridge-client.js"></script>
+  <script src="../../shared/core/latex-parser.js"></script>
+  <script src="../../shared/ui/mathlive-editor.js"></script>
+  <script src="../../shared/ui/symbol-library.js"></script>
+  <script src="../adapters/wps-document.js"></script>
+  <script src="../adapters/wps-selection.js"></script>
+  <script src="taskpane.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "app": {
+    "title": "LaTeXSnipper",
+    "description": "Insert LaTeX formulas into WPS documents"
+  },
+  "editor": {
+    "label": "LaTeX Formula",
+    "placeholder": "Enter LaTeX formula...",
+    "preview": "Preview"
+  },
+  "symbols": {
+    "label": "Symbol Library"
+  },
+  "actions": {
+    "insertOmml": "Insert Formula (OMML)",
+    "insertImage": "Insert Formula (Image)",
+    "preview": "Preview",
+    "clear": "Clear"
+  },
+  "settings": {
+    "label": "Settings",
+    "displayMode": "Display Mode",
+    "fontSize": "Font Size"
+  },
+  "status": {
+    "connected": "Connected to Bridge",
+    "disconnected": "Bridge not available, using local renderer"
+  },
+  "errors": {
+    "invalidLatex": "Invalid LaTeX syntax",
+    "insertFailed": "Failed to insert formula"
+  }
+}

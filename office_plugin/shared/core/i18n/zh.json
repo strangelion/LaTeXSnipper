@@ -1,0 +1,33 @@
+{
+  "app": {
+    "title": "LaTeXSnipper",
+    "description": "在 WPS 文档中插入 LaTeX 公式"
+  },
+  "editor": {
+    "label": "LaTeX 公式",
+    "placeholder": "输入 LaTeX 公式...",
+    "preview": "预览"
+  },
+  "symbols": {
+    "label": "符号库"
+  },
+  "actions": {
+    "insertOmml": "插入公式 (OMML)",
+    "insertImage": "插入公式 (图片)",
+    "preview": "预览",
+    "clear": "清空"
+  },
+  "settings": {
+    "label": "设置",
+    "displayMode": "显示模式",
+    "fontSize": "字体大小"
+  },
+  "status": {
+    "connected": "已连接到 Bridge",
+    "disconnected": "Bridge 不可用，使用本地渲染器"
+  },
+  "errors": {
+    "invalidLatex": "LaTeX 语法无效",
+    "insertFailed": "插入公式失败"
+  }
+}
