@@ -3,7 +3,6 @@ class LocalRenderer {
     const { display = true } = options;
 
     try {
-      // Use KaTeX for local rendering
       const katex = require('katex');
       const html = katex.renderToString(latex, {
         displayMode: display,
@@ -28,7 +27,7 @@ class LocalRenderer {
   }
 
   async htmlToPng(html) {
-    // Placeholder - will implement with canvas in Task 4
+    // Placeholder - will implement with canvas for PNG rendering
     return null;
   }
 }

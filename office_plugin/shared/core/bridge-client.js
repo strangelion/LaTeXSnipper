@@ -1,9 +1,11 @@
+const { LocalRenderer } = require('./local-renderer');
+
 class BridgeClient {
   constructor(baseUrl = 'http://127.0.0.1:28765') {
     this.baseUrl = baseUrl;
     this.token = null;
     this.isConnected = false;
-    this.localRenderer = null;
+    this.localRenderer = new LocalRenderer();
   }
 
   async connect() {
@@ -19,13 +21,18 @@ class BridgeClient {
     } catch (error) {
       console.warn('Bridge not available, using local renderer');
       this.isConnected = false;
-      const { LocalRenderer } = require('./local-renderer');
-      this.localRenderer = new LocalRenderer();
       return false;
     }
   }
 
   async convertLatex(latex, options = {}) {
+    if (!latex || typeof latex !== 'string') {
+      return {
+        ok: false,
+        error: { code: 'invalid_input', message: 'latex must be a non-empty string' }
+      };
+    }
+
     const { display = true, targets = ['omml', 'png'] } = options;
 
     if (this.isConnected) {
