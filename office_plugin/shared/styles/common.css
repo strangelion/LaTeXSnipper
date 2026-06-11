@@ -104,3 +104,65 @@ body {
   font-size: 12px;
   margin-top: 4px;
 }
+
+.symbol-library {
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.symbol-tabs {
+  display: flex;
+  overflow-x: auto;
+  background: var(--surface-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.symbol-tab {
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.symbol-tab:hover {
+  background: var(--background-color);
+}
+
+.symbol-tab.active {
+  background: var(--primary-color);
+  color: white;
+}
+
+.symbol-content {
+  padding: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.symbol-category {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
+  gap: 4px;
+}
+
+.symbol-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--surface-color);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.symbol-btn:hover {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
