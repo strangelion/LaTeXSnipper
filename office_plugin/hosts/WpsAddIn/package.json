@@ -1,0 +1,13 @@
+{
+  "name": "latexsnipper-wps",
+  "version": "1.0.0",
+  "description": "LaTeX formula plugin for WPS Office",
+  "main": "main.js",
+  "scripts": {
+    "debug": "wpsjs debug",
+    "build": "wpsjs build",
+    "publish": "wpsjs publish"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
