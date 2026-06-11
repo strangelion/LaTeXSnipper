@@ -133,7 +133,7 @@ class TaskPane {
         if (result.result.png) {
           preview.innerHTML = '<img src="data:image/png;base64,' + result.result.png + '" style="max-width: 100%;">';
         } else if (result.result.omml) {
-          preview.innerHTML = '<span style="color: var(--success-color);">公式已准备好</span>';
+          preview.innerHTML = `<span style="color: var(--success-color);">${this.t('preview.ready')}</span>`;
         }
       } else {
         preview.innerHTML = '<span class="error-message">' + result.error.message + '</span>';

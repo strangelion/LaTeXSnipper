@@ -26,6 +26,9 @@
     "connected": "Connected to Bridge",
     "disconnected": "Bridge not available, using local renderer"
   },
+  "preview": {
+    "ready": "Formula ready"
+  },
   "errors": {
     "invalidLatex": "Invalid LaTeX syntax",
     "insertFailed": "Failed to insert formula"

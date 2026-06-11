@@ -26,6 +26,9 @@
     "connected": "已连接到 Bridge",
     "disconnected": "Bridge 不可用，使用本地渲染器"
   },
+  "preview": {
+    "ready": "公式已准备好"
+  },
   "errors": {
     "invalidLatex": "LaTeX 语法无效",
     "insertFailed": "插入公式失败"
