@@ -75,6 +75,15 @@ class WpsDocumentAdapter {
       const cc = contentControls.Item(i);
       if (cc.Tag && cc.Tag.startsWith('latexsnipper-eq-')) {
         if (mode === 'automatic') {
+          const equationId = cc.Tag.replace('latexsnipper-eq-', '');
+          const numberTag = `latexsnipper-eqn-${equationId}`;
+          for (let j = 1; j <= contentControls.Count; j++) {
+            const numberCc = contentControls.Item(j);
+            if (numberCc.Tag === numberTag) {
+              numberCc.Range.Text = `[${counter}]`;
+              break;
+            }
+          }
           counter++;
         }
       }
