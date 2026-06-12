@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<JsPlugin>
+  <ApiVersion>1.0.0</ApiVersion>
+  <Name>LaTeXSnipper</Name>
+  <Description>LaTeX formula plugin for WPS Office</Description>
+  <Version>1.0.0</Version>
+  <Provider>LaTeXSnipper</Provider>
+  <HostType>wps</HostType>
+  <Launch>
+    <Script>main.js</Script>
+  </Launch>
+  <Ribbon>
+    <RibbonXML>ribbon.xml</RibbonXML>
+  </Ribbon>
+  <TaskPane>
+    <Location>ui/taskpane.html</Location>
+    <DockPosition>right</DockPosition>
+    <Width>400</Width>
+  </TaskPane>
+</JsPlugin>
