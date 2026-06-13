@@ -241,7 +241,6 @@ jobs:
             }
             Write-Host "Using installer: $vsInstaller"
 
-            # Use Start-Process for reliable argument handling on CI
             $proc = Start-Process -FilePath $vsInstaller -ArgumentList @(
               'modify',
               '--installPath', "`"$vsPath`"",
@@ -252,7 +251,6 @@ jobs:
             Write-Host "VS installer exit code: $($proc.ExitCode)"
 
             if ($proc.ExitCode -notin @(0, 3010)) {
-              # Fallback: try vs_buildtools.exe which is more reliable on CI
               Write-Host "vs_installer.exe failed. Trying vs_buildtools.exe fallback..."
               $btPath = "$env:TEMP\vs_buildtools.exe"
               Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vs_buildtools.exe" -OutFile $btPath -UseBasicParsing

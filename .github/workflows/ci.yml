@@ -192,6 +192,52 @@ jobs:
       - name: Byte-compile cross-platform specs
         run: python -m py_compile LaTeXSnipper-linux.spec LaTeXSnipper-macos.spec
 
+      - name: Ensure C++ ATL component
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -property installationPath
+          Write-Host "Visual Studio: $vsPath"
+
+          # Check ATL by looking for the header directly (vswhere -requires can be unreliable)
+          $msvcDir = Get-ChildItem -Path "$vsPath\VC\Tools\MSVC" -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
+          $atlHeader = if ($msvcDir) { Join-Path $msvcDir.FullName "atlmfc\include\atlbase.h" } else { $null }
+          if (-not $atlHeader -or -not (Test-Path $atlHeader)) {
+            Write-Host "C++ ATL not found. Installing..."
+            $vsInstaller = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+            $proc = Start-Process -FilePath $vsInstaller -ArgumentList @(
+              'modify',
+              '--installPath', "`"$vsPath`"",
+              '--add', 'Microsoft.VisualStudio.Component.VC.ATL',
+              '--quiet', '--norestart', '--wait'
+            ) -Wait -PassThru -NoNewWindow
+            Write-Host "VS installer exit code: $($proc.ExitCode)"
+
+            if ($proc.ExitCode -notin @(0, 3010)) {
+              Write-Host "vs_installer.exe failed. Trying vs_buildtools.exe fallback..."
+              $btPath = "$env:TEMP\vs_buildtools.exe"
+              Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vs_buildtools.exe" -OutFile $btPath -UseBasicParsing
+              $proc2 = Start-Process -FilePath $btPath -ArgumentList @(
+                'modify',
+                '--installPath', "`"$vsPath`"",
+                '--add', 'Microsoft.VisualStudio.Component.VC.ATL',
+                '--quiet', '--norestart', '--wait'
+              ) -Wait -PassThru -NoNewWindow
+              Write-Host "vs_buildtools.exe exit code: $($proc2.ExitCode)"
+              if ($proc2.ExitCode -notin @(0, 3010)) {
+                throw "Failed to install C++ ATL component."
+              }
+            }
+          }
+
+          # Verify ATL headers exist
+          $msvcDir = Get-ChildItem -Path "$vsPath\VC\Tools\MSVC" -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
+          $atlHeader = if ($msvcDir) { Join-Path $msvcDir.FullName "atlmfc\include\atlbase.h" } else { $null }
+          if (-not $atlHeader -or -not (Test-Path $atlHeader)) {
+            throw "ATL installation could not be verified: atlbase.h not found under $vsPath\VC\Tools\MSVC"
+          }
+          Write-Host "ATL verified: $atlHeader"
+
       - name: Build Office plugin core
         shell: pwsh
         run: |
