@@ -192,6 +192,23 @@ jobs:
       - name: Byte-compile cross-platform specs
         run: python -m py_compile LaTeXSnipper-linux.spec LaTeXSnipper-macos.spec
 
+      - name: Ensure C++ ATL component
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -property installationPath
+          $atlCheck = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.ATL -property installationPath
+          if (-not $atlCheck) {
+            Write-Host "C++ ATL not found. Installing..."
+            $vsInstaller = Join-Path $vsPath "..\..\Installer\vs_installer.exe"
+            if (-not (Test-Path $vsInstaller)) {
+              $vsInstaller = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+            }
+            & $vsInstaller modify --installPath $vsPath --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart --wait
+            if ($LASTEXITCODE -ne 0) { throw "Failed to install C++ ATL component." }
+          }
+          Write-Host "C++ ATL is available."
+
       - name: Build Office plugin core
         shell: pwsh
         run: |
