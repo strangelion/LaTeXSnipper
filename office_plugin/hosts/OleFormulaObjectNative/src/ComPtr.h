@@ -42,6 +42,13 @@ public:
         if (p) p->Release();
     }
 
+    HRESULT CopyTo(T** pp) const noexcept {
+        if (!pp) return E_POINTER;
+        *pp = p_;
+        if (p_) p_->AddRef();
+        return S_OK;
+    }
+
     operator T*() const noexcept { return p_; }
     T& operator*() const noexcept { return *p_; }
     T** operator&() noexcept { Release(); return &p_; }
