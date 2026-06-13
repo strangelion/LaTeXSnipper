@@ -269,6 +269,8 @@ a = Analysis(
         "win32ui",
         "setuptools",
         "pkg_resources",
+        "matplotlib",
+        "latex2mathml",
 
         # Unused standard-library modules
         "tkinter",

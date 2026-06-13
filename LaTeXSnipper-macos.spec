@@ -275,6 +275,8 @@ a = Analysis(
         "win32ui",
         "setuptools",
         "pkg_resources",
+        "matplotlib",
+        "latex2mathml",
 
         # Platform-independent exclusions
         "tkinter",
