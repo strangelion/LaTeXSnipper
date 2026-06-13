@@ -1,7 +1,6 @@
 #include "FormulaOleObject.h"
 #include "OleFormulaIds.h"
 
-#include <atlbase.h>
 #include <new>
 
 extern LONG GetNativeOleObjectCount();

@@ -2,7 +2,7 @@
 
 #include "Presentation.h"
 
-#include <atlbase.h>
+#include "ComPtr.h"
 #include <oleidl.h>
 #include <string>
 
