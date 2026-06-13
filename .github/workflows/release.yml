@@ -211,23 +211,36 @@ jobs:
           Write-Host "Office Plugin version: $ver"
           "version=$ver" >> $env:GITHUB_OUTPUT
 
-      - name: Ensure VSTO MSBuild targets
+      - name: Ensure VSTO MSBuild targets and ATL component
         shell: pwsh
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $vsPath = & $vswhere -latest -products * -property installationPath
           Write-Host "Visual Studio: $vsPath"
-          $vsto = Join-Path $vsPath "MSBuild\Microsoft\VisualStudio\v17.0\OfficeTools\Microsoft.VisualStudio.Tools.Office.targets"
-          if (-not (Test-Path $vsto)) {
-            Write-Host "VSTO tools not found. Installing Office/SharePoint workload..."
+
+          $needsInstall = $false
+          $vsto = Get-ChildItem -Path "$vsPath\MSBuild\Microsoft\VisualStudio" -Recurse -Filter "Microsoft.VisualStudio.Tools.Office.targets" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $vsto) {
+            Write-Host "VSTO tools not found."
+            $needsInstall = $true
+          }
+
+          $atlCheck = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.ATL -property installationPath
+          if (-not $atlCheck) {
+            Write-Host "C++ ATL component not found."
+            $needsInstall = $true
+          }
+
+          if ($needsInstall) {
+            Write-Host "Installing Office workload and C++ ATL..."
             $vsInstaller = Join-Path $vsPath "..\..\Installer\vs_installer.exe"
             if (-not (Test-Path $vsInstaller)) {
               $vsInstaller = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
             }
-            & $vsInstaller modify --installPath $vsPath --add Microsoft.VisualStudio.Workload.Office --quiet --norestart --wait
-            if ($LASTEXITCODE -ne 0) { throw "Failed to install VSTO tools." }
+            & $vsInstaller modify --installPath $vsPath --add Microsoft.VisualStudio.Workload.Office --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart --wait
+            if ($LASTEXITCODE -ne 0) { throw "Failed to install VSTO and ATL tools." }
           }
-          Write-Host "VSTO tools are available."
+          Write-Host "VSTO and ATL tools are available."
 
       - name: Build Office plugin
         shell: pwsh
