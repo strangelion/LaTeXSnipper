@@ -6,7 +6,6 @@
 #include "StorageUtil.h"
 #include "Win32Check.h"
 
-#include <atlconv.h>
 #include <comdef.h>
 #include <new>
 #include <vector>
