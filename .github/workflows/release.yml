@@ -11,6 +11,11 @@ on:
         required: true
         default: "v2.3.2_Final_Stable"
         type: string
+      publish_assets:
+        description: "Upload artifacts to the GitHub Release"
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   actions: read
@@ -51,7 +56,17 @@ jobs:
 
       - name: Install Inno Setup
         shell: pwsh
-        run: choco install innosetup --yes --no-progress
+        run: |
+          $iscc = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) {
+              throw "Inno Setup installation failed with exit code $LASTEXITCODE."
+            }
+          }
 
       - name: Prepare bundled Python seed
         shell: pwsh
@@ -178,136 +193,44 @@ jobs:
           retention-days: 30
 
   build-office-plugin-installer:
-    name: Build Office Plugin Installer
-    runs-on: windows-2025
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: 1
-      DOTNET_NOLOGO: 1
+    name: Validate Office Plugin Installer
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          lfs: true
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: "9.0.x"
-
-      - name: Install Inno Setup
-        shell: pwsh
-        run: choco install innosetup --yes --no-progress
-
-      - name: Extract version from tag
-        id: version
-        shell: pwsh
+      - name: Validate committed Office installer
+        id: installer
+        shell: bash
+        env:
+          RELEASE_SOURCE: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
         run: |
-          $source = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.release_tag }}" } else { "${{ github.ref }}" }
-          if ($source -match 'v?(\d+\.\d+\.\d+)') {
-            $ver = $matches[1]
-          } else {
-            $ver = (Get-Content -Raw Inno\latexsnipper.iss | Select-String 'MyAppVersion\s+"([^"]+)"').Matches.Groups[1].Value
-          }
-          Write-Host "Office Plugin version: $ver"
-          "version=$ver" >> $env:GITHUB_OUTPUT
-
-      - name: Ensure VSTO MSBuild targets and ATL component
-        shell: pwsh
-        run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vsPath = & $vswhere -latest -products * -property installationPath
-          Write-Host "Visual Studio: $vsPath"
-
-          $needsInstall = $false
-          $vsto = Get-ChildItem -Path "$vsPath\MSBuild\Microsoft\VisualStudio" -Recurse -Filter "Microsoft.VisualStudio.Tools.Office.targets" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $vsto) {
-            Write-Host "VSTO tools not found."
-            $needsInstall = $true
-          }
-
-          # Check ATL by looking for the header directly (vswhere -requires can be unreliable)
-          $msvcDir = Get-ChildItem -Path "$vsPath\VC\Tools\MSVC" -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
-          $atlHeader = if ($msvcDir) { Join-Path $msvcDir.FullName "atlmfc\include\atlbase.h" } else { $null }
-          if (-not $atlHeader -or -not (Test-Path $atlHeader)) {
-            Write-Host "C++ ATL component not found."
-            $needsInstall = $true
-          }
-
-          if ($needsInstall) {
-            Write-Host "Installing Office workload and C++ ATL..."
-            $vsInstaller = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
-            if (-not (Test-Path $vsInstaller)) {
-              $vsInstaller = Join-Path $vsPath "..\..\Installer\vs_installer.exe"
-            }
-            Write-Host "Using installer: $vsInstaller"
-
-            $proc = Start-Process -FilePath $vsInstaller -ArgumentList @(
-              'modify',
-              '--installPath', "`"$vsPath`"",
-              '--add', 'Microsoft.VisualStudio.Workload.Office',
-              '--add', 'Microsoft.VisualStudio.Component.VC.ATL',
-              '--quiet', '--norestart', '--wait'
-            ) -Wait -PassThru -NoNewWindow
-            Write-Host "VS installer exit code: $($proc.ExitCode)"
-
-            if ($proc.ExitCode -notin @(0, 3010)) {
-              Write-Host "vs_installer.exe failed. Trying vs_buildtools.exe fallback..."
-              $btPath = "$env:TEMP\vs_buildtools.exe"
-              Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vs_buildtools.exe" -OutFile $btPath -UseBasicParsing
-              $proc2 = Start-Process -FilePath $btPath -ArgumentList @(
-                'modify',
-                '--installPath', "`"$vsPath`"",
-                '--add', 'Microsoft.VisualStudio.Component.VC.ATL',
-                '--quiet', '--norestart', '--wait'
-              ) -Wait -PassThru -NoNewWindow
-              Write-Host "vs_buildtools.exe exit code: $($proc2.ExitCode)"
-              if ($proc2.ExitCode -notin @(0, 3010)) {
-                throw "Failed to install ATL component. Exit codes: vs_installer=$($proc.ExitCode), vs_buildtools=$($proc2.ExitCode)"
-              }
-            }
-          }
-
-          # Verify ATL headers exist
-          $msvcDir = Get-ChildItem -Path "$vsPath\VC\Tools\MSVC" -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
-          $atlHeader = if ($msvcDir) { Join-Path $msvcDir.FullName "atlmfc\include\atlbase.h" } else { $null }
-          if (-not $atlHeader -or -not (Test-Path $atlHeader)) {
-            throw "ATL installation could not be verified: atlbase.h not found under $vsPath\VC\Tools\MSVC"
-          }
-          Write-Host "ATL verified: $atlHeader"
-          Write-Host "VSTO and ATL tools are available."
-
-      - name: Build Office plugin
-        shell: pwsh
-        run: |
-          Set-Location office_plugin
-          .\tools\Register-WordVstoAddIn.ps1 -Configuration Release -SkipCertificateTrust -SkipVstoInstaller -SkipOfficeRegistration
-          .\tools\Register-PowerPointVstoAddIn.ps1 -Configuration Release -SkipCertificateTrust -SkipVstoInstaller -SkipOfficeRegistration
-          dotnet build LaTeXSnipper.OfficePlugin.slnx -c Release
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.ATL -property installationPath
-          if (-not $vsPath) { throw "Visual Studio C++ ATL tools were not found." }
-          $msbuild = Join-Path $vsPath "MSBuild\Current\Bin\amd64\MSBuild.exe"
-          & $msbuild hosts\OleFormulaObjectNative\LaTeXSnipper.OfficePlugin.OleFormulaObjectHandler.vcxproj /p:Configuration=Release /p:Platform=x64 /m
-          if ($LASTEXITCODE -ne 0) { throw "Native OLE x64 build failed." }
-          & $msbuild hosts\OleFormulaObjectNative\LaTeXSnipper.OfficePlugin.OleFormulaObjectHandler.vcxproj /p:Configuration=Release /p:Platform=Win32 /m
-          if ($LASTEXITCODE -ne 0) { throw "Native OLE x86 build failed." }
-          $subjects = @('CN=LaTeXSnipper Office Plugin VSTO')
-          $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -in $subjects } | Sort-Object NotAfter -Descending | Select-Object -First 1
-          if ($cert) { Export-Certificate -Cert $cert -FilePath installer\vsto-signing.cer -Type CERT -Force } else { Write-Host 'WARNING: VSTO signing cert not found' }
-
-      - name: Build installer
-        shell: pwsh
-        run: |
-          Set-Location office_plugin
-          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { $iscc = Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe" }
-          & $iscc /DVersion=${{ steps.version.outputs.version }} /DConfig=Release installer\setup.iss
+          if [[ "$RELEASE_SOURCE" =~ v?([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            version="${BASH_REMATCH[1]}"
+          else
+            echo "Release source does not contain a semantic version: $RELEASE_SOURCE" >&2
+            exit 1
+          fi
+          installer="office_plugin/release/OfficePluginSetup-${version}.exe"
+          checksum="${installer}.sha256"
+          test -f "$installer"
+          test -f "$checksum"
+          expected="$(awk '{print tolower($1)}' "$checksum")"
+          actual="$(sha256sum "$installer" | awk '{print $1}')"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "Office installer checksum mismatch." >&2
+            exit 1
+          fi
+          echo "Validated $installer ($actual)"
+          echo "path=$installer" >> "$GITHUB_OUTPUT"
 
       - name: Upload Office plugin installer artifact
         uses: actions/upload-artifact@v7
         with:
           name: office-plugin-installer
-          path: office_plugin/dist/OfficePluginSetup-*.exe
+          path: ${{ steps.installer.outputs.path }}
           if-no-files-found: error
           retention-days: 30
 
@@ -407,6 +330,8 @@ jobs:
           python-version: "3.11"
 
       - name: Install macOS packaging tools
+        env:
+          HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
         run: brew install create-dmg
 
       - name: Build macOS app
@@ -459,7 +384,7 @@ jobs:
 
   publish-release-assets:
     name: Publish Release Assets
-    if: ${{ always() && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') && needs.build-windows-installer.result == 'success' && needs.build-office-plugin-installer.result == 'success' && needs.build-linux-deb.result == 'success' && needs.build-macos-app.result == 'success' && needs.build-user-manual.result == 'success' }}
+    if: ${{ always() && (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_assets)) && needs.build-windows-installer.result == 'success' && needs.build-office-plugin-installer.result == 'success' && needs.build-linux-deb.result == 'success' && needs.build-macos-app.result == 'success' && needs.build-user-manual.result == 'success' }}
     runs-on: ubuntu-latest
     needs:
       - build-windows-installer
