@@ -21,10 +21,16 @@ public sealed partial class DynamicWordApplicationAdapter
     public Task<IReadOnlyList<WordFormulaEntry>> LoadSelectedFormulaEntriesAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        IReadOnlyList<WordFormulaEntry> entries = FindSelectedFormulas()
+        IReadOnlyList<WordFormulaEntry> entries = CollectSelectedFormulas()
             .Select(item => new WordFormulaEntry(GetFormulaStart(item), item.Metadata))
+            .Concat(CollectSelectedNativeWordFormulaEntries())
             .OrderByDescending(item => item.Start)
             .ToArray();
+        if (entries.Count == 0)
+        {
+            throw new InvalidOperationException(WordAddInText.Get("SelectedFormulaRequired"));
+        }
+
         return Task.FromResult(entries);
     }
 
@@ -39,6 +45,7 @@ public sealed partial class DynamicWordApplicationAdapter
             if (ole != null)
             {
                 dynamic inlineShape = ole;
+                double oleFontSizePoints = ReadOleEquivalentFontSize(inlineShape);
                 dynamic insertionRange;
                 string replacementOoxml;
                 if (metadata.NumberingMode == NumberingMode.None)
@@ -72,10 +79,12 @@ public sealed partial class DynamicWordApplicationAdapter
 
                 ApplyManagedEquationStyleById(metadata);
                 object insertedControl = FindFormulaControlById(metadata.Identity.EquationId);
+                ApplyManagedEquationFontSize(insertedControl, oleFontSizePoints);
+                NormalizeManagedInlineEquationBaseline(metadata, insertedControl);
                 WordFormulaMetadataStore.SaveOmmlNaturalFontSize(
                     _wordApplication.ActiveDocument,
                     metadata.Identity.EquationId,
-                    ReadManagedEquationFontSize(insertedControl));
+                    oleFontSizePoints);
                 SaveFormulaMetadata(metadata);
                 MoveSelectionAfterInsertedFormula(metadata, display);
                 return;
@@ -86,10 +95,42 @@ public sealed partial class DynamicWordApplicationAdapter
             ReplaceFormulaContent(control, ooxml, equationOoxml, metadata);
             ApplyManagedEquationFontSizeById(
                 metadata.Identity.EquationId,
-                metadata.FontScale == 1 ? fontSizePoints : WordOleBaseFontPoints * metadata.FontScale);
+                ScaleFontSize(fontSizePoints, metadata.FontScale));
             ApplyManagedEquationStyleById(metadata);
+            NormalizeManagedInlineEquationBaseline(metadata, FindFormulaControlById(metadata.Identity.EquationId));
+            SaveFormulaMetadata(metadata);
         });
         return Task.CompletedTask;
+    }
+
+    private double ReadOleEquivalentFontSize(dynamic inlineShape)
+    {
+        double fontSize = ReadPointSize(inlineShape.Range.Font.Size);
+        if (fontSize <= 0)
+        {
+            fontSize = GetCurrentFontSizePoints();
+        }
+
+        try
+        {
+            double currentHeight = Convert.ToDouble(inlineShape.Height, System.Globalization.CultureInfo.InvariantCulture);
+            string tag = Convert.ToString(inlineShape.AlternativeText) ?? string.Empty;
+            if (WordFormulaMetadataStore.TryLoadOleNaturalSize(
+                    _wordApplication.ActiveDocument,
+                    tag,
+                    out double naturalWidth,
+                    out double naturalHeight) &&
+                naturalHeight > 0 &&
+                currentHeight > 0)
+            {
+                fontSize *= Math.Max(0.05, currentHeight / naturalHeight);
+            }
+        }
+        catch
+        {
+        }
+
+        return Math.Max(1, fontSize);
     }
 
     private dynamic RemoveOmmlConversionSource(dynamic control, FormulaMetadata metadata)

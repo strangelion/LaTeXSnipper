@@ -25,10 +25,7 @@ public sealed partial class DynamicWordApplicationAdapter
         }
 
         SaveFormulaMetadata(metadata);
-        if (metadata.NumberingMode == NumberingMode.None && metadata.DisplayMode == FormulaDisplayMode.Inline)
-        {
-            NormalizePlainTextBaselineByFormulaId(metadata.Identity.EquationId);
-        }
+        NormalizeManagedInlineEquationBaseline(metadata, FindFormulaControlById(metadata.Identity.EquationId));
     }
 
     private void ReplaceFormulaContent(object contentControl, string ooxml, FormulaMetadata metadata)

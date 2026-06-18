@@ -26,9 +26,7 @@ public sealed partial class DynamicWordApplicationAdapter
             (object equationControl, object? numberControl) =
                 FindInsertedFormulaControls(insertionPoint, metadata.Identity.EquationId);
 
-            double naturalFontSize = metadata.FontScale == 1
-                ? fontSizePoints
-                : WordOleBaseFontPoints * metadata.FontScale;
+            double naturalFontSize = ScaleFontSize(fontSizePoints, metadata.FontScale);
             ApplyManagedEquationFontSize(equationControl, naturalFontSize);
             ShowContentControlChrome((dynamic)equationControl);
             WordFormulaMetadataStore.SaveOmmlNaturalFontSize(
@@ -36,6 +34,11 @@ public sealed partial class DynamicWordApplicationAdapter
                 metadata.Identity.EquationId,
                 naturalFontSize);
             ApplyManagedEquationStyle(equationControl, metadata);
+            if (metadata.DisplayMode == FormulaDisplayMode.Inline)
+            {
+                ResetManagedEquationBaseline(equationControl);
+            }
+
             if (numberControl != null)
             {
                 ApplyNumberControlVerticalAlignment(numberControl, metadata);
@@ -84,6 +87,44 @@ public sealed partial class DynamicWordApplicationAdapter
     public Task ResetOleFormulaObjectAsync(string equationId, FormulaMetadata metadata, OlePresentationResult presentation, bool display, CancellationToken cancellationToken)
     {
         return ReplaceOleFormulaObjectAsync(equationId, metadata, presentation, display, preserveUserScale: false, cancellationToken);
+    }
+
+    public Task ReplaceNativeWordFormulaWithOleAsync(
+        int sourceStart,
+        FormulaMetadata metadata,
+        OlePresentationResult presentation,
+        bool display,
+        CancellationToken cancellationToken)
+    {
+        if (metadata == null)
+        {
+            throw new ArgumentNullException(nameof(metadata));
+        }
+
+        if (presentation == null)
+        {
+            throw new ArgumentNullException(nameof(presentation));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        ExecuteWithScreenUpdatingSuspended(() =>
+        {
+            dynamic nativeEquation = FindNativeWordFormulaByStart(sourceStart);
+            string originalOoxml = Convert.ToString(nativeEquation.Range.WordOpenXML) ?? string.Empty;
+            dynamic insertionRange = RemoveNativeWordFormulaSource(nativeEquation, display);
+            try
+            {
+                dynamic inserted = InsertPlainOleInlineShape(insertionRange, metadata, presentation, display);
+                SaveFormulaMetadata(metadata);
+                MoveSelectionAfterInlineShape(inserted, metadata.Identity.EquationId, display);
+            }
+            catch
+            {
+                RestoreNativeWordFormula(insertionRange, originalOoxml);
+                throw;
+            }
+        });
+        return Task.CompletedTask;
     }
 
     private Task ReplaceOleFormulaObjectAsync(
@@ -190,6 +231,55 @@ public sealed partial class DynamicWordApplicationAdapter
         });
 
         return Task.CompletedTask;
+    }
+
+    private dynamic FindNativeWordFormulaByStart(int sourceStart)
+    {
+        dynamic equations = _wordApplication.ActiveDocument.OMaths;
+        int count = Convert.ToInt32(equations.Count);
+        for (int index = 1; index <= count; index++)
+        {
+            dynamic equation = equations.Item(index);
+            if (GetRangeStart(equation.Range) == sourceStart)
+            {
+                return equation;
+            }
+        }
+
+        throw new InvalidOperationException(WordAddInText.Get("SelectedFormulaRequired"));
+    }
+
+    private dynamic RemoveNativeWordFormulaSource(dynamic nativeEquation, bool display)
+    {
+        dynamic sourceRange = nativeEquation.Range;
+        if (display)
+        {
+            dynamic paragraphRange = sourceRange.Paragraphs.Item(1).Range;
+            return ClearParagraphContent(paragraphRange);
+        }
+
+        int insertionPoint = GetRangeStart(sourceRange);
+        sourceRange.Text = InlineConversionSlot;
+        return CreateDocumentRange(
+            insertionPoint,
+            insertionPoint + InlineConversionSlot.Length);
+    }
+
+    private static void RestoreNativeWordFormula(dynamic insertionRange, string originalOoxml)
+    {
+        if (string.IsNullOrWhiteSpace(originalOoxml))
+        {
+            return;
+        }
+
+        try
+        {
+            insertionRange.Text = string.Empty;
+            insertionRange.InsertXML(originalOoxml);
+        }
+        catch
+        {
+        }
     }
 
     private dynamic InsertPlainOleInlineShape(dynamic range, FormulaMetadata metadata, OlePresentationResult presentation, bool display)
@@ -314,6 +404,13 @@ public sealed partial class DynamicWordApplicationAdapter
         return fontSize > 0 ? fontSize : GetCurrentFontSizePoints();
     }
 
+    private static double ScaleFontSize(double fontSizePoints, double fontScale)
+    {
+        double baseSize = fontSizePoints > 0 ? fontSizePoints : WordOleBaseFontPoints;
+        double scale = fontScale > 0 ? fontScale : 1;
+        return baseSize * scale;
+    }
+
     private void ApplyManagedEquationFontSizeById(string equationId, double fontSizePoints)
     {
         if (fontSizePoints <= 0)
@@ -340,6 +437,19 @@ public sealed partial class DynamicWordApplicationAdapter
         dynamic control = contentControl;
         ShowContentControlChrome(control);
         TryCom(() => control.Range.Font.Size = fontSizePoints);
+    }
+
+    private static void ResetManagedEquationBaseline(object contentControl)
+    {
+        dynamic control = contentControl;
+        TryCom(() => control.Range.Font.Position = 0);
+        dynamic equations = control.Range.OMaths;
+        int equationCount = Convert.ToInt32(equations.Count);
+        for (int index = 1; index <= equationCount; index++)
+        {
+            dynamic equation = equations.Item(index);
+            TryCom(() => equation.Range.Font.Position = 0);
+        }
     }
 
     private (object EquationControl, object? NumberControl) FindInsertedFormulaControls(

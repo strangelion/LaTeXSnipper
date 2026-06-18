@@ -148,7 +148,7 @@ public sealed partial class PowerPointPluginController : IDisposable
         }
 
         FormulaMetadata? previous = accepted.UpdateMode ? accepted.InitialFormula : null;
-        FormulaMetadata metadata = CreateMetadata(accepted.Latex, previous);
+        FormulaMetadata metadata = CreateMetadata(accepted.Latex, previous, accepted.FontStyle);
         if (previous != null && IsSameRenderedFormula(previous, metadata))
         {
             _hasLoadedShapePosition = false;
@@ -313,7 +313,7 @@ public sealed partial class PowerPointPluginController : IDisposable
         return Task.CompletedTask;
     }
 
-    private static FormulaMetadata CreateMetadata(string latex, FormulaMetadata? previous)
+    private static FormulaMetadata CreateMetadata(string latex, FormulaMetadata? previous, FormulaFontStyle? acceptedFontStyle = null)
     {
         string normalizedLatex = string.IsNullOrWhiteSpace(latex) ? DefaultLatex : latex.Trim();
         PowerPointPluginSettings settings = PowerPointPluginSettings.Load();
@@ -326,8 +326,8 @@ public sealed partial class PowerPointPluginController : IDisposable
             previous?.RenderEngine ?? RenderEngineKind.Image,
             schemaVersion: previous?.SchemaVersion ?? 1,
             previous?.FontColor ?? settings.FormulaColor,
-            previous?.FontStyle ?? settings.FormulaFontStyle,
-            previous?.FontScale ?? 1);
+            acceptedFontStyle ?? previous?.FontStyle ?? settings.FormulaFontStyle,
+            previous?.FontScale ?? settings.FormulaFontScale);
     }
 
     private static FormulaMetadata CreateEditorDraft()
@@ -342,14 +342,15 @@ public sealed partial class PowerPointPluginController : IDisposable
             RenderEngineKind.Image,
             schemaVersion: 1,
             settings.FormulaColor,
-            settings.FormulaFontStyle);
+            settings.FormulaFontStyle,
+            settings.FormulaFontScale);
     }
 
     private async Task<OlePresentationResult> RenderOlePresentationAsync(FormulaMetadata metadata, CancellationToken cancellationToken)
     {
         var request = new RenderRequest(BuildFormattedLatex(metadata), metadata.DisplayMode, RenderEngineKind.MathJaxSvg)
         {
-            FontScale = InitialFormulaScale
+            FontScale = InitialFormulaScale * metadata.FontScale
         };
         RenderResult intermediate = await _mathJaxRenderer.RenderAsync(request, cancellationToken);
         return await _olePresentationPipeline.RenderAsync(
@@ -361,7 +362,7 @@ public sealed partial class PowerPointPluginController : IDisposable
     {
         var request = new RenderRequest(BuildFormattedLatex(metadata), FormulaDisplayMode.Display, RenderEngineKind.MathJaxSvg)
         {
-            FontScale = InitialFormulaScale
+            FontScale = InitialFormulaScale * metadata.FontScale
         };
         RenderResult svg = await _mathJaxRenderer.RenderAsync(request, cancellationToken);
         byte[] png = SvgPngRasterizer.Rasterize(
@@ -377,20 +378,7 @@ public sealed partial class PowerPointPluginController : IDisposable
 
     private static string BuildFormattedLatex(FormulaMetadata metadata)
     {
-        string latex = metadata.Latex;
-        switch (metadata.FontStyle)
-        {
-            case FormulaFontStyle.RomanUpright:
-                latex = "\\mathrm{" + latex + "}";
-                break;
-            case FormulaFontStyle.Bold:
-                latex = "\\boldsymbol{" + latex + "}";
-                break;
-            case FormulaFontStyle.Italic:
-                latex = "\\mathit{" + latex + "}";
-                break;
-        }
-
+        string latex = MathLiveLatexStyleNormalizer.ApplyRenderFontStyle(metadata.Latex, metadata.FontStyle);
         return string.Equals(metadata.FontColor, "#000000", StringComparison.OrdinalIgnoreCase)
             ? latex
             : "\\color{" + metadata.FontColor + "}{" + latex + "}";
