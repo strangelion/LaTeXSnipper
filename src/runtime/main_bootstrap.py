@@ -249,7 +249,6 @@ def bootstrap_application() -> BootstrapContext:
 
     deps_dir = _initial_deps_dir()
     deps_dir.mkdir(parents=True, exist_ok=True)
-    print(f"[DEBUG] 依赖目录: {deps_dir}")
 
     ensure_startup_splash("加载依赖向导模块...")
     ensure_startup_splash("加载设置模块...")
@@ -257,6 +256,7 @@ def bootstrap_application() -> BootstrapContext:
 
     ensure_startup_splash("定位依赖目录...")
     install_base_dir = resolve_install_base_dir()
+    print(f"[DEBUG] 依赖目录: {install_base_dir}")
     open_wizard_env = os.environ.get("LATEXSNIPPER_OPEN_WIZARD", "") == "1"
     if _is_packaged_mode() and open_wizard_env:
         base_dir, target_py = _prepare_python_runtime_for_wizard(install_base_dir)

@@ -421,6 +421,19 @@ def ensure_deps(prompt_ui=True, require_layers=("BASIC", "CORE"), force_enter=Fa
     if not deps_dir:
         deps_dir = _read_config_install_dir(cfg_path)
 
+    if deps_dir and current_site:
+        try:
+            site_norm = os.path.normcase(os.path.abspath(str(current_site)))
+            deps_norm = os.path.normcase(os.path.abspath(deps_dir))
+            if not site_norm.startswith(deps_norm):
+                conda_env = current_pyexe.parent
+                if conda_env.exists() and _site_packages_root(current_pyexe):
+                    deps_dir = str(conda_env)
+                    _write_config_install_dir(cfg_path, deps_dir)
+                    print(f"[INFO] 检测到外部 Python 环境，依赖目录已切换: {deps_dir}")
+        except Exception:
+            pass
+
     if not deps_dir:
         parent = app.activeWindow()
         _notify_before_show_ui()
@@ -498,7 +511,11 @@ def ensure_deps(prompt_ui=True, require_layers=("BASIC", "CORE"), force_enter=Fa
             pyexe = current_pyexe
             use_bundled_python = False
         else:
-            if existing_pyexe and existing_pyexe.exists():
+            if _is_usable_python(current_pyexe):
+                use_bundled_python = False
+                pyexe = current_pyexe
+                print(f"[INFO] {mode_str}：当前 Python 与依赖目录不一致，但当前解释器可用，直接使用: {pyexe}")
+            elif existing_pyexe and existing_pyexe.exists():
                 use_bundled_python = False
                 pyexe = existing_pyexe
                 print(f"[INFO] {mode_str}：当前 Python 与依赖目录不一致，将复用目录内已有 Python: {pyexe}")
