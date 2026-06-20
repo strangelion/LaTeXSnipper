@@ -243,6 +243,7 @@ class MainWindowSetupMixin:
 
 
         btn_row = QHBoxLayout()
+        btn_row.setSpacing(4)
         self.clear_history_button = PushButton(FluentIcon.DELETE, "清空")
         self.change_key_button = PushButton(FluentIcon.CLIPPING_TOOL, "快捷键")
         self.show_fav_button = PushButton(FluentIcon.HEART, "收藏夹")
@@ -297,14 +298,19 @@ class MainWindowSetupMixin:
         self.workbench_btn.clicked.connect(self.open_workbench)
         editor_actions = QHBoxLayout()
         editor_actions.setContentsMargins(0, 0, 0, 0)
-        editor_actions.setSpacing(6)
-        editor_actions.addWidget(self.upload_image_btn)
-        editor_actions.addWidget(self.upload_pdf_btn)
-        editor_actions.addWidget(self.handwriting_btn)
-        editor_actions.addWidget(self.copy_editor_btn)
-        editor_actions.addWidget(self.export_btn)
-        editor_actions.addWidget(self.bilingual_reading_btn)
-        editor_actions.addWidget(self.workbench_btn)
+        editor_actions.setSpacing(4)
+        for btn in (
+            self.upload_image_btn,
+            self.upload_pdf_btn,
+            self.handwriting_btn,
+            self.copy_editor_btn,
+            self.export_btn,
+            self.bilingual_reading_btn,
+            self.workbench_btn,
+        ):
+            btn.setMinimumWidth(0)
+            btn.setSizePolicy(btn.sizePolicy().horizontalPolicy(), btn.sizePolicy().verticalPolicy())
+            editor_actions.addWidget(btn)
         editor_header.addLayout(editor_actions)
         right_layout.addLayout(editor_header)
 

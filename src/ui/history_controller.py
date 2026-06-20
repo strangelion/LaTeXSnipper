@@ -32,6 +32,7 @@ from ui.history_panel import (
 )
 from ui.menu_helpers import CenterMenu
 from ui.window_helpers import (
+    apply_no_minimize_window_flags,
     exec_close_only_message_box as _exec_close_only_message_box,
     show_formula_rename_dialog as _show_formula_rename_dialog,
 )
@@ -73,6 +74,11 @@ class HistoryControllerMixin:
 
     def show_lan_share_dialog(self):
         """Open LAN and encrypted WebDAV sharing tools."""
+        from preview.math_preview import dialog_theme_tokens, is_dark_ui
+        from PyQt6.QtCore import QThread, pyqtSignal
+        from PyQt6.QtWidgets import QCheckBox, QComboBox, QFormLayout
+        from qfluentwidgets import PrimaryPushButton
+
         server = getattr(self, "_lan_share_server", None)
         if server is not None:
             try:
@@ -81,63 +87,220 @@ class HistoryControllerMixin:
                 pass
             self._lan_share_server = None
 
-        try:
-            server = LanShareServer(
-                self._build_share_history_package,
-                self._import_share_history_package,
-            )
-            server.start()
-            self._lan_share_server = server
-        except Exception as exc:
-            InfoBar.error(
-                title="共享失败",
-                content=str(exc),
-                parent=self._get_infobar_parent(),
-                duration=3500,
-                position=InfoBarPosition.TOP,
-            )
-            return
+        t = dialog_theme_tokens()
+        dark = is_dark_ui()
+        selection_bg = "#3b4756" if dark else "#d7e3f1"
+        focus_border = "#66788a" if dark else "#9aa9bb"
+
+        input_qss = f"""
+            QLineEdit {{
+                background: {t['panel_bg']};
+                color: {t['text']};
+                border: 1px solid {t['border']};
+                border-radius: 6px;
+                padding: 5px 8px;
+                selection-background-color: {selection_bg};
+                selection-color: {t['text']};
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {focus_border};
+            }}
+            QLineEdit:disabled {{
+                background: {t['panel_bg']};
+                color: {t['muted']};
+            }}
+        """
+        label_qss = f"color: {t['text']}; font-weight: 500;"
+        hint_qss = f"color: {t['muted']}; font-size: 11px;"
+        section_title_qss = f"color: {t['accent']}; font-weight: 600; font-size: 13px; margin-top: 8px;"
 
         dlg = QDialog(self)
         dlg.setWindowTitle("共享")
-        layout = QVBoxLayout(dlg)
+        dlg.setMinimumWidth(420)
+        dlg.setStyleSheet(f"QDialog {{ background: {t['window_bg']}; }}")
+        apply_no_minimize_window_flags(dlg)
 
-        urls = "\n".join(server.display_urls())
-        lan_info = QLabel(
-            "局域网共享服务已启动。手机端打开 历史 -> 共享，填写任一地址和 PIN。\n\n"
-            f"地址:\n{urls}\n\nPIN: {server.pin}"
-        )
-        lan_info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(lan_info)
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(18, 14, 18, 14)
+        layout.setSpacing(10)
+
+        lan_title = QLabel("局域网共享")
+        lan_title.setStyleSheet(section_title_qss)
+        layout.addWidget(lan_title)
+
+        lan_hint = QLabel("正在启动共享服务…")
+        lan_hint.setStyleSheet(f"color: {t['muted']}; font-size: 12px; line-height: 1.5;")
+        lan_hint.setWordWrap(True)
+        layout.addWidget(lan_hint)
+
+        sep = QLabel()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet(f"background: {t['border']};")
+        layout.addWidget(sep)
+
+        webdav_title = QLabel("WebDAV 加密同步")
+        webdav_title.setStyleSheet(section_title_qss)
+        layout.addWidget(webdav_title)
 
         form = QFormLayout()
+        form.setContentsMargins(0, 4, 0, 0)
+        form.setSpacing(8)
+
         webdav_url = QLineEdit()
-        webdav_url.setPlaceholderText("https://dav.example.com/latexsnipper/history.json")
+        webdav_url.setPlaceholderText("https://dav.example.com/user/  (自动存储到 latexsnipper/ 子目录)")
+        webdav_url.setStyleSheet(input_qss)
+        webdav_url.setFixedHeight(32)
+
         webdav_user = QLineEdit()
+        webdav_user.setPlaceholderText("用户名")
+        webdav_user.setStyleSheet(input_qss)
+        webdav_user.setFixedHeight(32)
+
         webdav_password = QLineEdit()
         webdav_password.setEchoMode(QLineEdit.EchoMode.Password)
+        webdav_password.setPlaceholderText("WebDAV 密码")
+        webdav_password.setStyleSheet(input_qss)
+        webdav_password.setFixedHeight(32)
+
         encrypt_password = QLineEdit()
         encrypt_password.setEchoMode(QLineEdit.EchoMode.Password)
         encrypt_password.setPlaceholderText("至少 8 位，用于 AES-GCM 加密")
-        form.addRow("WebDAV 文件 URL", webdav_url)
-        form.addRow("用户名", webdav_user)
-        form.addRow("WebDAV 密码", webdav_password)
-        form.addRow("加密密码", encrypt_password)
+        encrypt_password.setStyleSheet(input_qss)
+        encrypt_password.setFixedHeight(32)
+
+        for label_text, widget in [
+            ("文件 URL", webdav_url),
+            ("用户名", webdav_user),
+            ("WebDAV 密码", webdav_password),
+            ("加密密码", encrypt_password),
+        ]:
+            lbl = QLabel(label_text)
+            lbl.setStyleSheet(label_qss)
+            form.addRow(lbl, widget)
+
         layout.addLayout(form)
 
-        status = QLabel("WebDAV 凭据仅用于本次操作，不会保存。")
+        from sharing.webdav_sync import has_saved_webdav_credentials, load_webdav_credentials
+
+        saved_hint = has_saved_webdav_credentials()
+        status = QLabel(
+            "凭据已加密保存（无法查看，填写新值可覆盖）。文件将存储到 latexsnipper/ 子目录。" if saved_hint
+            else "首次填写后将加密保存到本地，之后无法查看，只能覆盖。文件将存储到 latexsnipper/ 子目录。"
+        )
+        status.setStyleSheet(hint_qss)
         layout.addWidget(status)
 
-        button_row = QHBoxLayout()
-        download_btn = QPushButton("下载并合并")
-        upload_btn = QPushButton("加密上传")
-        close_btn = QPushButton("关闭")
-        button_row.addWidget(download_btn)
-        button_row.addWidget(upload_btn)
-        button_row.addWidget(close_btn)
-        layout.addLayout(button_row)
+        sep2 = QLabel()
+        sep2.setFixedHeight(1)
+        sep2.setStyleSheet(f"background: {t['border']};")
+        layout.addWidget(sep2)
 
-        def settings():
+        auto_sync_title = QLabel("定时同步")
+        auto_sync_title.setStyleSheet(section_title_qss)
+        layout.addWidget(auto_sync_title)
+
+        auto_sync_row = QHBoxLayout()
+        auto_sync_row.setSpacing(8)
+        auto_sync_check = QCheckBox("启用定时同步")
+        auto_sync_check.setStyleSheet(f"color: {t['text']}; font-size: 12px;")
+        auto_sync_interval = QComboBox()
+        auto_sync_interval.addItems(["5 分钟", "15 分钟", "30 分钟", "1 小时", "2 小时"])
+        auto_sync_interval.setCurrentIndex(1)
+        auto_sync_interval.setStyleSheet(input_qss)
+        auto_sync_interval.setFixedHeight(28)
+        auto_sync_interval.setFixedWidth(100)
+        auto_sync_row.addWidget(auto_sync_check)
+        auto_sync_row.addWidget(QLabel("间隔:"))
+        auto_sync_row.addWidget(auto_sync_interval)
+        auto_sync_row.addStretch()
+        layout.addLayout(auto_sync_row)
+
+        auto_sync_hint = QLabel("启用后，桌面端会定时从 WebDAV 拉取并合并最新历史。需先填写上方 WebDAV 凭据。")
+        auto_sync_hint.setStyleSheet(hint_qss)
+        auto_sync_hint.setWordWrap(True)
+        layout.addWidget(auto_sync_hint)
+
+        sync_status_label = QLabel("")
+        sync_status_label.setStyleSheet(hint_qss)
+        layout.addWidget(sync_status_label)
+
+        INTERVAL_MS = [300_000, 900_000, 1_800_000, 3_600_000, 7_200_000]
+        auto_sync_timer = QTimer(self)
+        auto_sync_timer.setSingleShot(True)
+
+        def do_auto_sync():
+            if not auto_sync_check.isChecked():
+                return
+            url_val, user_val, pwd_val, enc_val = webdav_settings()
+            if not url_val or not enc_val:
+                sync_status_label.setText("跳过同步：未填写 WebDAV 凭据")
+                auto_sync_timer.start(INTERVAL_MS[auto_sync_interval.currentIndex()])
+                return
+
+            def _do():
+                from sharing.webdav_sync import download_package
+                pkg = download_package(url_val, user_val, pwd_val, enc_val)
+                added, updated = self._import_share_history_package(pkg)
+                return added, updated
+
+            class SyncWorker(QThread):
+                finished = pyqtSignal(object)
+                error = pyqtSignal(str)
+
+                def __init__(self, fn):
+                    super().__init__()
+                    self._fn = fn
+
+                def run(self):
+                    try:
+                        result = self._fn()
+                        self.finished.emit(result)
+                    except Exception as exc:
+                        self.error.emit(str(exc))
+
+            def on_sync_done(result):
+                if isinstance(result, tuple):
+                    added, updated = result
+                    sync_status_label.setText(
+                        f"上次同步: 新增 {added} 条，更新 {updated} 条"
+                    )
+                auto_sync_timer.start(INTERVAL_MS[auto_sync_interval.currentIndex()])
+
+            def on_sync_error(msg):
+                sync_status_label.setText(f"同步失败: {msg}")
+                auto_sync_timer.start(INTERVAL_MS[auto_sync_interval.currentIndex()])
+
+            sync_status_label.setText("正在同步…")
+            w = SyncWorker(_do)
+            w.finished.connect(on_sync_done)
+            w.error.connect(on_sync_error)
+            w.start()
+
+        def toggle_auto_sync(state):
+            auto_sync_timer.stop()
+            if state:
+                do_auto_sync()
+            else:
+                sync_status_label.setText("")
+
+        auto_sync_check.stateChanged.connect(toggle_auto_sync)
+
+        set_busy = [False]
+
+        class WebdavWorker(QThread):
+            finished = pyqtSignal(str)
+
+            def __init__(self, fn):
+                super().__init__()
+                self._fn = fn
+
+            def run(self):
+                try:
+                    self._fn()
+                except Exception as exc:
+                    self.finished.emit(str(exc))
+
+        def webdav_settings():
             return (
                 webdav_url.text().strip(),
                 webdav_user.text().strip(),
@@ -145,34 +308,115 @@ class HistoryControllerMixin:
                 encrypt_password.text(),
             )
 
-        def upload_webdav():
-            try:
-                from sharing.webdav_sync import upload_package
+        worker_ref = [None]
 
-                upload_package(*settings(), self._build_share_history_package())
-                status.setText("已加密上传到 WebDAV。")
-            except Exception as exc:
-                status.setText(f"上传失败: {exc}")
+        def set_buttons_busy(busy):
+            set_busy[0] = busy
+            for btn in (upload_btn, download_btn):
+                btn.setEnabled(not busy)
+            status.setText("正在处理…" if busy else "")
+
+        def on_worker_done(msg):
+            set_buttons_busy(False)
+            status.setStyleSheet(f"color: {t['text']}; font-size: 11px;")
+            status.setText(msg)
+
+        def upload_webdav():
+            if set_busy[0]:
+                return
+            set_buttons_busy(True)
+            status.setStyleSheet(f"color: {t['muted']}; font-size: 11px;")
+
+            def _do():
+                from sharing.webdav_sync import upload_package, save_webdav_credentials
+                url_val, user_val, pwd_val, enc_val = webdav_settings()
+                pkg = self._build_share_history_package()
+                upload_package(url_val, user_val, pwd_val, enc_val, pkg)
+                save_webdav_credentials(url_val, user_val, pwd_val, enc_val)
+
+            w = WebdavWorker(_do)
+            w.finished.connect(on_worker_done)
+            worker_ref[0] = w
+            w.start()
 
         def download_webdav():
-            try:
-                from sharing.webdav_sync import download_package
+            if set_busy[0]:
+                return
+            set_buttons_busy(True)
+            status.setStyleSheet(f"color: {t['muted']}; font-size: 11px;")
 
-                package = download_package(*settings())
-                added, updated = self._import_share_history_package(package)
-                status.setText(f"已合并：新增 {added} 条，更新 {updated} 条。")
-            except Exception as exc:
-                status.setText(f"下载失败: {exc}")
+            def _do():
+                from sharing.webdav_sync import download_package, save_webdav_credentials
+                url_val, user_val, pwd_val, enc_val = webdav_settings()
+                pkg = download_package(url_val, user_val, pwd_val, enc_val)
+                added, updated = self._import_share_history_package(pkg)
+                save_webdav_credentials(url_val, user_val, pwd_val, enc_val)
+                on_worker_done(f"已合并：新增 {added} 条，更新 {updated} 条")
+
+            w = WebdavWorker(_do)
+            w.finished.connect(lambda msg: on_worker_done(msg))
+            worker_ref[0] = w
+            w.start()
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        download_btn = PrimaryPushButton("下载并合并")
+        download_btn.setFixedHeight(32)
+        upload_btn = PrimaryPushButton("加密上传")
+        upload_btn.setFixedHeight(32)
+        close_btn = PrimaryPushButton("关闭")
+        close_btn.setFixedHeight(32)
+        btn_row.addWidget(download_btn)
+        btn_row.addWidget(upload_btn)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
 
         upload_btn.clicked.connect(upload_webdav)
         download_btn.clicked.connect(download_webdav)
         close_btn.clicked.connect(dlg.accept)
 
+        def _start_lan_server():
+            try:
+                srv = LanShareServer(
+                    self._build_share_history_package,
+                    self._import_share_history_package,
+                )
+                srv.start()
+                self._lan_share_server = srv
+                urls = "\n".join(srv.display_urls())
+                lan_hint.setText(
+                    f"手机端打开 历史 → 共享，填写任一地址和 PIN\n"
+                    f"地址: {urls}\n"
+                    f"PIN: {srv.pin}"
+                )
+                lan_hint.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+                lan_hint.setStyleSheet(f"color: {t['text']}; font-size: 12px; line-height: 1.5;")
+            except Exception as exc:
+                lan_hint.setText(f"启动失败: {exc}")
+                lan_hint.setStyleSheet(f"color: #d32f2f; font-size: 12px;")
+
+        def _load_saved_credentials():
+            creds = load_webdav_credentials()
+            if creds:
+                webdav_url.setText(creds.get("url", ""))
+                webdav_user.setText(creds.get("username", ""))
+                webdav_password.setText(creds.get("password", ""))
+                encrypt_password.setText(creds.get("encrypt_password", ""))
+
+        QTimer.singleShot(0, _start_lan_server)
+        QTimer.singleShot(50, _load_saved_credentials)
+
         try:
             dlg.exec()
         finally:
+            auto_sync_timer.stop()
+            if worker_ref[0] is not None and worker_ref[0].isRunning():
+                worker_ref[0].quit()
+                worker_ref[0].wait(2000)
             try:
-                server.stop()
+                server_obj = getattr(self, "_lan_share_server", None)
+                if server_obj is not None:
+                    server_obj.stop()
             except Exception:
                 pass
             self._lan_share_server = None

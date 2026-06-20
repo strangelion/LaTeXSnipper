@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
+import platform
 from typing import Any
-
-import requests
 
 from sharing.history_package import parse_history_package
 
 ENCRYPTED_SCHEMA = "latexsnipper.share.encrypted.v1"
 ITERATIONS = 210000
+WEBDAV_SUBFOLDER = "latexsnipper"
+WEBDAV_FILENAME = "history.json"
 
 
 def _require_crypto():
@@ -29,6 +31,36 @@ def _derive_key(passphrase: str, salt: bytes) -> bytes:
     _aesgcm, sha256, pbkdf2 = _require_crypto()
     kdf = pbkdf2(algorithm=sha256(), length=32, salt=salt, iterations=ITERATIONS)
     return kdf.derive(passphrase.encode("utf-8"))
+
+
+def normalize_webdav_url(url: str) -> str:
+    """Ensure the WebDAV URL targets the latexsnipper subfolder.
+
+    - Bare server root (e.g. ``https://dav.example.com/``) -> appends
+      ``latexsnipper/history.json``.
+    - URL already ending with ``.json`` is kept as-is (user provided full path).
+    - URL ending with ``/`` -> appends ``latexsnipper/history.json``.
+    - URL pointing elsewhere (e.g. ``https://dav.example.com/mydir/notes.txt``)
+      is kept as-is.
+    """
+    from urllib.parse import urljoin, urlparse
+
+    url = (url or "").strip().rstrip("/")
+    if not url:
+        return url
+
+    parsed = urlparse(url)
+    path = parsed.path.rstrip("/")
+
+    # Already points to a .json file -> keep as-is
+    if path.endswith(".json"):
+        return url
+
+    # Points to a directory (or bare host) -> append subfolder + filename
+    if not path or not "." in path.split("/")[-1]:
+        return f"{parsed.scheme}://{parsed.netloc}/{path}/{WEBDAV_SUBFOLDER}/{WEBDAV_FILENAME}".replace("//", "/").replace(":///", "://")
+
+    return url
 
 
 def encrypt_package(package: dict[str, Any], passphrase: str) -> dict[str, Any]:
@@ -65,7 +97,10 @@ def decrypt_package(envelope: dict[str, Any], passphrase: str) -> dict[str, Any]
 
 
 def upload_package(url: str, username: str, password: str, passphrase: str, package: dict[str, Any]) -> None:
+    import requests
+
     encrypted = encrypt_package(package, passphrase)
+    url = normalize_webdav_url(url)
     response = requests.put(
         url,
         data=json.dumps(encrypted, ensure_ascii=False).encode("utf-8"),
@@ -77,6 +112,9 @@ def upload_package(url: str, username: str, password: str, passphrase: str, pack
 
 
 def download_package(url: str, username: str, password: str, passphrase: str) -> dict[str, Any]:
+    import requests
+
+    url = normalize_webdav_url(url)
     response = requests.get(
         url,
         auth=(username, password) if username or password else None,
@@ -84,3 +122,61 @@ def download_package(url: str, username: str, password: str, passphrase: str) ->
     )
     response.raise_for_status()
     return decrypt_package(response.json(), passphrase)
+
+
+def _device_key() -> bytes:
+    raw = f"{platform.node()}:{os.getuid() if hasattr(os, 'getuid') else platform.machine()}"
+    return hashlib.sha256(raw.encode()).digest()[:32]
+
+
+def save_webdav_credentials(url: str, username: str, password: str, encrypt_password: str) -> None:
+    """Encrypt and persist WebDAV credentials locally. Cannot be read back, only overwritten."""
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    key = _device_key()
+    iv = os.urandom(12)
+    plaintext = json.dumps({
+        "url": url,
+        "username": username,
+        "password": password,
+        "encrypt_password": encrypt_password,
+    }, ensure_ascii=False).encode("utf-8")
+    ct = AESGCM(key).encrypt(iv, plaintext, None)
+    blob = base64.b64encode(iv + ct).decode("ascii")
+
+    from runtime.config_manager import ConfigManager
+    cfg = ConfigManager()
+    cfg.set("webdav_credentials", blob)
+
+
+def load_webdav_credentials() -> dict[str, str] | None:
+    """Load encrypted WebDAV credentials. Returns None if not found or corrupted."""
+    from runtime.config_manager import ConfigManager
+
+    cfg = ConfigManager()
+    blob = cfg.get("webdav_credentials", "")
+    if not blob:
+        return None
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        raw = base64.b64decode(blob)
+        iv, ct = raw[:12], raw[12:]
+        key = _device_key()
+        plaintext = AESGCM(key).decrypt(iv, ct, None)
+        return json.loads(plaintext.decode("utf-8"))
+    except Exception:
+        return None
+
+
+def has_saved_webdav_credentials() -> bool:
+    """Check if saved credentials exist (without decrypting)."""
+    from runtime.config_manager import ConfigManager
+    return bool(ConfigManager().get("webdav_credentials", ""))
+
+
+def clear_webdav_credentials() -> None:
+    """Remove saved WebDAV credentials."""
+    from runtime.config_manager import ConfigManager
+    cfg = ConfigManager()
+    cfg.set("webdav_credentials", "")
