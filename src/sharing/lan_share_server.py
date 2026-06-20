@@ -14,6 +14,7 @@ from sharing.history_package import dumps_package, parse_history_package
 
 PackageProvider = Callable[[], dict[str, Any]]
 PackageImporter = Callable[[dict[str, Any]], tuple[int, int]]
+RecognizeProvider = Callable[[bytes, str], dict[str, Any]]
 
 
 def get_local_ipv4s() -> list[str]:
@@ -49,12 +50,14 @@ class LanShareServer:
         package_provider: PackageProvider,
         package_importer: PackageImporter,
         *,
+        recognize_provider: RecognizeProvider | None = None,
         host: str = "0.0.0.0",
         port: int = 0,
     ) -> None:
         self.pin = f"{secrets.randbelow(1_000_000):06d}"
         self._package_provider = package_provider
         self._package_importer = package_importer
+        self._recognize_provider = recognize_provider
         self._server = ThreadingHTTPServer((host, port), self._make_handler())
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
 
@@ -106,21 +109,43 @@ class LanShareServer:
 
             def do_POST(self) -> None:
                 parsed = urlparse(self.path)
-                if parsed.path != "/api/v1/history/import":
-                    self._send_json(404, {"ok": False, "error": "not_found"})
+                if parsed.path == "/api/v1/history/import":
+                    if not self._pin_matches(parsed.query):
+                        self._send_json(403, {"ok": False, "error": "invalid_pin"})
+                        return
+                    try:
+                        length = int(self.headers.get("Content-Length", "0"))
+                        if length <= 0 or length > 8 * 1024 * 1024:
+                            raise ValueError("invalid request size")
+                        package = parse_history_package(self.rfile.read(length))
+                        added, updated = outer._package_importer(package)
+                        self._send_json(200, {"ok": True, "added": added, "updated": updated})
+                    except Exception as exc:
+                        self._send_json(400, {"ok": False, "error": str(exc)})
                     return
-                if not self._pin_matches(parsed.query):
-                    self._send_json(403, {"ok": False, "error": "invalid_pin"})
+                if parsed.path == "/api/v1/recognize":
+                    if not self._pin_matches(parsed.query):
+                        self._send_json(403, {"ok": False, "error": "invalid_pin"})
+                        return
+                    if outer._recognize_provider is None:
+                        self._send_json(501, {"ok": False, "error": "recognition not available"})
+                        return
+                    try:
+                        length = int(self.headers.get("Content-Length", "0"))
+                        if length <= 0 or length > 10 * 1024 * 1024:
+                            raise ValueError("invalid request size")
+                        body = json.loads(self.rfile.read(length))
+                        image_b64 = body.get("image", "")
+                        mode = body.get("mode", "formula")
+                        if not image_b64:
+                            raise ValueError("missing image field")
+                        image_bytes = __import__("base64").b64decode(image_b64)
+                        result = outer._recognize_provider(image_bytes, mode)
+                        self._send_json(200, {"ok": True, **result})
+                    except Exception as exc:
+                        self._send_json(400, {"ok": False, "error": str(exc)})
                     return
-                try:
-                    length = int(self.headers.get("Content-Length", "0"))
-                    if length <= 0 or length > 8 * 1024 * 1024:
-                        raise ValueError("invalid request size")
-                    package = parse_history_package(self.rfile.read(length))
-                    added, updated = outer._package_importer(package)
-                    self._send_json(200, {"ok": True, "added": added, "updated": updated})
-                except Exception as exc:
-                    self._send_json(400, {"ok": False, "error": str(exc)})
+                self._send_json(404, {"ok": False, "error": "not_found"})
 
             def _pin_matches(self, query: str) -> bool:
                 qs = parse_qs(query)

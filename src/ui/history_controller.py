@@ -376,10 +376,25 @@ class HistoryControllerMixin:
         close_btn.clicked.connect(dlg.accept)
 
         def _start_lan_server():
+            def _recognize_image(image_bytes: bytes, mode: str) -> dict:
+                from io import BytesIO
+                from PIL import Image
+                img = Image.open(BytesIO(image_bytes))
+                model = getattr(self, "model", None)
+                if model is None:
+                    raise RuntimeError("OCR model not loaded")
+                result = model.predict_result(img, model_name="mathcraft")
+                return {
+                    "latex": str(result.get("text", "") or "").strip(),
+                    "score": result.get("score"),
+                    "mode": result.get("mode", mode),
+                }
+
             try:
                 srv = LanShareServer(
                     self._build_share_history_package,
                     self._import_share_history_package,
+                    recognize_provider=_recognize_image,
                 )
                 srv.start()
                 self._lan_share_server = srv
