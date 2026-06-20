@@ -3,11 +3,25 @@
 from __future__ import annotations
 
 import pyperclip
-from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox, QWidget
+from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 from qfluentwidgets import Action, InfoBar, InfoBarPosition
 
 from runtime.config_manager import normalize_content_type
 from runtime.history_store import load_history_store, save_history_store
+from sharing.history_package import build_history_package, merge_history_package
+from sharing.lan_share_server import LanShareServer
 from ui.edit_formula_dialog import EditFormulaDialog
 from ui.formula_export_menu import populate_formula_export_menu
 from ui.history_panel import (
@@ -34,6 +48,134 @@ MAX_HISTORY = 200
 
 
 class HistoryControllerMixin:
+    def _build_share_history_package(self):
+        return build_history_package(
+            self.history,
+            self._formula_names,
+            self._formula_types,
+            getattr(self, "_history_render_tags", None),
+            source="desktop",
+        )
+
+    def _import_share_history_package(self, package):
+        added, updated = merge_history_package(
+            package,
+            self.history,
+            self._formula_names,
+            self._formula_types,
+            self._history_render_tags,
+            max_history=MAX_HISTORY,
+        )
+        self.save_history()
+        QTimer.singleShot(0, self.rebuild_history_ui)
+        QTimer.singleShot(0, lambda: self.set_action_status(f"共享导入完成：新增 {added} 条"))
+        return added, updated
+
+    def show_lan_share_dialog(self):
+        """Open LAN and encrypted WebDAV sharing tools."""
+        server = getattr(self, "_lan_share_server", None)
+        if server is not None:
+            try:
+                server.stop()
+            except Exception:
+                pass
+            self._lan_share_server = None
+
+        try:
+            server = LanShareServer(
+                self._build_share_history_package,
+                self._import_share_history_package,
+            )
+            server.start()
+            self._lan_share_server = server
+        except Exception as exc:
+            InfoBar.error(
+                title="共享失败",
+                content=str(exc),
+                parent=self._get_infobar_parent(),
+                duration=3500,
+                position=InfoBarPosition.TOP,
+            )
+            return
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("共享")
+        layout = QVBoxLayout(dlg)
+
+        urls = "\n".join(server.display_urls())
+        lan_info = QLabel(
+            "局域网共享服务已启动。手机端打开 历史 -> 共享，填写任一地址和 PIN。\n\n"
+            f"地址:\n{urls}\n\nPIN: {server.pin}"
+        )
+        lan_info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(lan_info)
+
+        form = QFormLayout()
+        webdav_url = QLineEdit()
+        webdav_url.setPlaceholderText("https://dav.example.com/latexsnipper/history.json")
+        webdav_user = QLineEdit()
+        webdav_password = QLineEdit()
+        webdav_password.setEchoMode(QLineEdit.EchoMode.Password)
+        encrypt_password = QLineEdit()
+        encrypt_password.setEchoMode(QLineEdit.EchoMode.Password)
+        encrypt_password.setPlaceholderText("至少 8 位，用于 AES-GCM 加密")
+        form.addRow("WebDAV 文件 URL", webdav_url)
+        form.addRow("用户名", webdav_user)
+        form.addRow("WebDAV 密码", webdav_password)
+        form.addRow("加密密码", encrypt_password)
+        layout.addLayout(form)
+
+        status = QLabel("WebDAV 凭据仅用于本次操作，不会保存。")
+        layout.addWidget(status)
+
+        button_row = QHBoxLayout()
+        download_btn = QPushButton("下载并合并")
+        upload_btn = QPushButton("加密上传")
+        close_btn = QPushButton("关闭")
+        button_row.addWidget(download_btn)
+        button_row.addWidget(upload_btn)
+        button_row.addWidget(close_btn)
+        layout.addLayout(button_row)
+
+        def settings():
+            return (
+                webdav_url.text().strip(),
+                webdav_user.text().strip(),
+                webdav_password.text(),
+                encrypt_password.text(),
+            )
+
+        def upload_webdav():
+            try:
+                from sharing.webdav_sync import upload_package
+
+                upload_package(*settings(), self._build_share_history_package())
+                status.setText("已加密上传到 WebDAV。")
+            except Exception as exc:
+                status.setText(f"上传失败: {exc}")
+
+        def download_webdav():
+            try:
+                from sharing.webdav_sync import download_package
+
+                package = download_package(*settings())
+                added, updated = self._import_share_history_package(package)
+                status.setText(f"已合并：新增 {added} 条，更新 {updated} 条。")
+            except Exception as exc:
+                status.setText(f"下载失败: {exc}")
+
+        upload_btn.clicked.connect(upload_webdav)
+        download_btn.clicked.connect(download_webdav)
+        close_btn.clicked.connect(dlg.accept)
+
+        try:
+            dlg.exec()
+        finally:
+            try:
+                server.stop()
+            except Exception:
+                pass
+            self._lan_share_server = None
     def _show_history_context_menu(self, row: QWidget, global_pos):
         if not self._row_is_alive(row):
             return

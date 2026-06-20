@@ -7,3 +7,4 @@
 # Optional external tools:
 #   LaTeX renderer: MacTeX or BasicTeX
 #   Pandoc export backend: pandoc
+cryptography>=43,<46
