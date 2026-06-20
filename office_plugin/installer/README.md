@@ -4,7 +4,7 @@ Produces the released Word and PowerPoint plugin installer with Inno Setup 6.
 
 ## Prerequisites
 
-- Inno Setup 6+ (install from https://jrsoftware.org/isdl.php)
+- Inno Setup 6+ (install from <https://jrsoftware.org/isdl.php>)
 - Visual Studio 2022 with Office/SharePoint development workload (for VSTO MSBuild)
 - Visual Studio 2022 Visual C++ ATL components (for the native OLE formula object)
 - .NET 9.0 SDK (for dotnet build of shared libraries)
@@ -13,10 +13,10 @@ Produces the released Word and PowerPoint plugin installer with Inno Setup 6.
 
 ```batch
 cd office_plugin\installer
-build.bat 2.3.2 Release
+build.bat 2.4.0 Release
 ```
 
-Output: `office_plugin\dist\OfficePluginSetup-2.3.2.exe`
+Output: `office_plugin\dist\OfficePluginSetup-2.4.0.exe`
 
 ## Installation Responsibilities
 
@@ -33,4 +33,4 @@ Registration uses explicit Office add-in keys and VSTO trust entries. Cleanup is
 
 ## Version convention
 
-The installer version follows the main LaTeXSnipper client version (`2.3.2`).
+The installer version follows the main LaTeXSnipper client version (`2.4.0`).

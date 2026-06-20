@@ -17,6 +17,7 @@ Office 2016 is not officially supported (requires manual .NET 4.8 and WebView2 i
 ## Features
 
 ### Word
+
 - OLE formula insertion and update
 - Native OMML formula insertion (inline, display, numbered)
 - Load, update, and delete managed formulas
@@ -26,6 +27,7 @@ Office 2016 is not officially supported (requires manual .NET 4.8 and WebView2 i
 - Screenshot OCR via desktop Bridge
 
 ### PowerPoint
+
 - OLE and PNG formula insertion
 - Load, update, and delete managed formulas
 - In-place conversion of one selected managed formula between OLE and PNG
@@ -34,6 +36,7 @@ Office 2016 is not officially supported (requires manual .NET 4.8 and WebView2 i
 - Screenshot OCR via desktop Bridge
 
 ### Shared
+
 - Reusable WebView2/MathLive formula editor
 - 18-category shared symbol and formula library
 - Chinese and English Ribbon, task pane, editor, settings, and help
@@ -62,9 +65,9 @@ Shared libraries target `net48;net9.0`. Office hosts target .NET Framework 4.8. 
 The release build requires Visual Studio 2022 with Office/SharePoint and Visual C++ ATL workloads, .NET 9 SDK, and Inno Setup 6. Run from the repository root:
 
 ```batch
-office_plugin\installer\build.bat 2.3.2 Release
+office_plugin\installer\build.bat 2.4.0 Release
 ```
 
-Output: `office_plugin\dist\OfficePluginSetup-2.3.2.exe`
+Output: `office_plugin\dist\OfficePluginSetup-2.4.0.exe`
 
 Run the installer as administrator. Close Word and PowerPoint before installation, upgrade, or removal.

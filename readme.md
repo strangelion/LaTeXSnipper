@@ -9,7 +9,7 @@
 ![Forks](https://img.shields.io/github/forks/SakuraMathcraft/LaTeXSnipper?style=flat-square&label=Forks&color=1f6feb)
 ![Issues](https://img.shields.io/github/issues/SakuraMathcraft/LaTeXSnipper?style=flat-square&label=Issues&color=d1481e)
 ![License](https://img.shields.io/badge/license-GPLv3-blue?style=flat-square)
-![Version](https://img.shields.io/badge/version-v2.3.2_Final_Stable-brightgreen?style=flat-square)
+![Version](https://img.shields.io/badge/version-v2.4.0-LTS-brightgreen?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-orange?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11-blue?style=flat-square)
 
@@ -156,16 +156,17 @@ python src/main.py
 
 | Platform | Status | Notes |
 |------|------|------|
-| Windows | Primary release target | Native global hotkey, Qt capture, GitHub/Inno and Store/MSIX packaging. |
+| Windows | Primary release target | Native global hotkey, Qt capture, GitHub/Inno packaging. |
 | Linux | Supported via provider layer | `pynput` global hotkey, Qt capture first, optional Wayland/X11 CLI or portal fallbacks. |
 | macOS | Supported via provider layer | Native global hotkey, Qt capture with `screencapture` fallback, Screen Recording permission may be required. |
 
 Linux and macOS both create optional runtime dependency environments in the
-user state directory, so they need a usable system Python 3.10+ with venv/pip
-support. Debian/Ubuntu `.deb` installs declare `python3` and `python3-venv`;
-macOS users should install Python through Homebrew (`brew install python`) or
-the official python.org macOS installer when the system does not provide a
-usable `python3`.
+user state directory, so they need a usable system Python `>=3.10,<3.13` with
+venv/pip support. Python 3.11 is preferred because it matches the Windows
+bundled runtime. Debian/Ubuntu `.deb` installs declare `python3` and
+`python3-venv`; macOS users should install Homebrew `python@3.11` or an
+official python.org 3.11/3.12 installer when the system does not provide a
+usable supported `python3`.
 
 ---
 

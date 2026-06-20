@@ -11,7 +11,6 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QApplication, QDialog, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QVBoxLayout
 from qfluentwidgets import FluentIcon, InfoBar, InfoBarPosition, PushButton
 
-from runtime.distribution import is_store_distribution
 from update.dialog_helpers import (
     _clear_global,
     _hidden_subprocess_kwargs,
@@ -45,13 +44,9 @@ from update.release_types import (
     _normalize_sha256,
 )
 from update.remote_image_browser import RemoteImageBrowser
-from update.store_dialog import _store_update_dialog
 
 
 def check_update_dialog(parent=None):
-    if is_store_distribution():
-        return _store_update_dialog(parent)
-
     existing = _show_existing_update_dialog()
     if existing is not None:
         return existing
@@ -332,7 +327,7 @@ a{{color:{theme['accent']};}}
         signature_status = _read_signature_status(path)
         if isinstance(info, ReleaseInfo):
             _save_installer_meta(info, path, sha256_hex)
-        if os.name != "nt" or not getattr(sys, "frozen", False) or ext not in (".exe", ".msi"):
+        if os.name != "nt" or not getattr(sys, "frozen", False) or ext != ".exe":
             lbl_status.setText(f"下载完成: {path}")
             InfoBar.success(
                 title="更新已下载",
